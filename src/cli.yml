@@ -1,0 +1,26 @@
+name: chasm
+version: "0.1.0"
+about: Official Cellia Cross-Assembler for Modern Computers
+subcommands:
+  - assemble:
+      about: Assembles Cellia assembly files.
+      version: "0.1.0"
+      args:
+        - verbose:
+            short: v
+            multiple: false
+            help: Enables verbose mode
+        - INPUT:
+            help: Sets the input source file
+            required: true
+            index: 1
+        - output:
+            short: o
+            help: Sets the name of the output binary file
+            multiple: false
+            takes_value: true
+        - spt:
+            short: s
+            help: Indicates the number of spaces that constitute a tab. Default is 4 spaces.
+            takes_value: true
+            default_value: 4

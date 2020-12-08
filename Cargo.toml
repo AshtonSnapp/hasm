@@ -1,0 +1,11 @@
+[package]
+name = "chasm"
+version = "0.1.0"
+authors = ["Ashton Scott Snapp <ashton@ashtons.xyz>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { version = "2.33", features = ["yaml"] }
+regex = "1.4.2"
