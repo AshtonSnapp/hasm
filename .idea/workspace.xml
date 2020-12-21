@@ -5,14 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="99e5ef18-bb3f-47e2-987f-8170d67e980e" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/dictionaries/ashtons.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/intellij-javadocs-4.0.1.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/chasm.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/cli.yml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/lex.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/dictionaries/ashtons.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dictionaries/ashtons.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lex.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/lex.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -47,7 +42,7 @@
     <property name="org.rust.cargo.project.model.PROJECT_DISCOVERY" value="true" />
     <property name="org.rust.disableDetachedFileInspection/home/ashtons/Documents/Cellia/chasm/src/lex.rs" value="true" />
     <property name="org.rust.disableDetachedFileInspection/home/ashtons/Documents/Cellia/chasm/src/main.rs" value="true" />
-    <property name="settings.editor.selected.configurable" value="configurable.group.language" />
+    <property name="settings.editor.selected.configurable" value="preferences.pluginManager" />
   </component>
   <component name="RustProjectSettings">
     <option name="toolchainHomeDirectory" value="$USER_HOME$/.cargo/bin" />
@@ -67,13 +62,18 @@
     <servers />
   </component>
   <component name="WindowStateProjectService">
+    <state x="2376" y="162" key="SettingsEditor" timestamp="1608528778532">
+      <screen x="1920" y="0" width="1920" height="1080" />
+    </state>
+    <state x="2376" y="162" key="SettingsEditor/1920.0.1920.1080/0.0.1920.1052@1920.0.1920.1080" timestamp="1608528778532" />
     <state x="622" y="241" key="run.anything.popup" timestamp="1607309325538">
       <screen x="0" y="0" width="1920" height="1052" />
     </state>
     <state x="622" y="241" key="run.anything.popup/0.0.1920.1052/1920.0.1920.1080@0.0.1920.1052" timestamp="1607309325538" />
-    <state x="623" y="232" width="672" height="678" key="search.everywhere.popup" timestamp="1607308594538">
-      <screen x="0" y="0" width="1920" height="1052" />
+    <state x="2543" y="238" width="672" height="697" key="search.everywhere.popup" timestamp="1608534552570">
+      <screen x="1920" y="0" width="1920" height="1080" />
     </state>
     <state x="623" y="232" width="672" height="678" key="search.everywhere.popup/0.0.1920.1052/1920.0.1920.1080@0.0.1920.1052" timestamp="1607308594538" />
+    <state x="2543" y="238" width="672" height="697" key="search.everywhere.popup/1920.0.1920.1080/0.0.1920.1052@1920.0.1920.1080" timestamp="1608534552570" />
   </component>
 </project>
