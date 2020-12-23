@@ -563,7 +563,7 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                 tokens.push(t);
 
                 if v {
-                    println!("INFO: Label \"{}\" defined on line {}.", &t.content, line);
+                    println!("INFO: Label \"{}\" defined on line {}.", &t.content, l);
                 }
 
                 lcontent = lcontent.replacen(format!("{}:", &t.content), "", 1);
@@ -606,13 +606,23 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
             tokens.push(Token::new(&lcontent[0..4], TokenInfo::Directive));
             lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
 
+            if v {
+                println!("INFO: Origin directive found on line {}.", l);
+            }
+
             let arg = address(&lcontent);
             match arg {
                 Ok(t) => {
-                    match t.info {
+                    match &t.info {
                         TokenInfo::Address(i) => {
                             match i.mode {
-                                AddressMode::AbsoluteMemory => {}
+                                AddressMode::AbsoluteMemory => {
+                                    tokens.push(t);
+
+                                    if v {
+                                        println!("INFO: Address {} found on line {}.", &t.content, l);
+                                    }
+                                }
                                 _ => Err(format!("Origin Directive with invalid argument (.org must have an absolute memory address) on line {}.", l))
                             }
                         }
@@ -632,12 +642,25 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
             tokens.push(Token::new(&lcontent[0..4], TokenInfo::Directive));
             lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
 
+            if v {
+                println!("INFO: Symbol definition directive found on line {}.", l);
+            }
+
             let ident = identifier(&lcontent);
             match ident {
-                Ok(t) => tokens.push(t),
+                Ok(mut t) => {
+                    t.info = TokenInfo::Identifier(Some(IdentifierType::Symbol));
+                    tokens.push(t);
+
+                    if v {
+                        println!("INFO: Symbol \"{}\" defined on line {}.", &t.content, l);
+                    }
+
+                    lcontent = lcontent.replacen(&t.content, "", 1);
+                }
                 Err(e) => Err(format!("{} on line {}.", e, l))
             }
-            lcontent = lcontent.replacen(&tokens[tokens.len()-1].content, "", 1);
+
             if lcontent.starts_with(",") {
                 lcontent = lcontent.replacen(",", "", 1);
             }
@@ -657,9 +680,17 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                                     Err(format!("Symbol definition directive with invalid argument (.def cannot take a string) on line {}.", l))
                                 } else {
                                     tokens.push(t);
+
+                                    if v {
+                                        println!("INFO: Character immediate '{}' found on line {}.", &t.content, l);
+                                    }
                                 }
                             } else {
                                 tokens.push(t);
+
+                                if v {
+                                    println!("INFO: Numeric immediate {} found on line {}", &t.content, l);
+                                }
                             }
                         }
                         _ => Err(format!("You should never see this message."))
@@ -668,7 +699,13 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                 Err(e) => {
                     if e == String::from("e") {
                         match arg.1 {
-                            Ok(t) => tokens.push(t),
+                            Ok(t) => {
+                                tokens.push(t);
+
+                                if v {
+                                    println!("INFO: Address {} found on line {}.", &t.content, l);
+                                }
+                            }
                             Err(e) => {
                                 if e == String::from("e") {
                                     Err(format!("Symbol definition directive with invalid argument (.def needs an address or immediate) on line {}.", l))
@@ -687,6 +724,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
             tokens.push(Token::new(&lcontent[0..4], TokenInfo::Directive));
             lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
 
+            if v {
+                println!("INFO: Byte placement directive found on line {}.", l);
+            }
+
             let arg = immediate(&lcontent);
             match arg {
                 Ok(t) => {
@@ -695,12 +736,20 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                             if let ValueType::ASCII = i.vtype {
                                 if let ImmediateSize::Character = i.size {
                                     tokens.push(t);
+
+                                    if v {
+                                        println!("INFO: Character immediate '{}' found on line {}.", &t.content, l);
+                                    }
                                 } else {
                                     Err(format!("Byte placement directive with invalid argument (.byt cannot handle strings) on line {}.", l))
                                 }
                             } else {
                                 if let ImmediateSize::Byte = i.size {
                                     tokens.push(t);
+
+                                    if v {
+                                        println!("INFO: Numeric immediate {} found on line {}", &t.content, l);
+                                    }
                                 } else {
                                     Err(format!("Byte placement directive with invalid argument (.byt needs a byte, not a word) on line {}.", l))
                                 }
@@ -711,7 +760,17 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                 }
                 Err(e) => {
                     if e == String::from("e") {
-                        Err(format!("Byte placement directive with invalid argument (.byt needds a byte immediate, not an address) on line {}.", l))
+                        let ident = identifier(&lcontent);
+                        match ident {
+                            Ok(t) => {
+                                tokens.push(t);
+
+                                if v {
+                                    println!("INFO: Identifier \"{}\" used on line {}.", &t.content, l);
+                                }
+                            }
+                            Err(e) => Err(format!("Byte placement directive with invalid argument (.byt needs a byte immediate or a valid identifier (label/symbol)) on line {}.", l))
+                        }
                     } else {
                         Err(format!("{} on line {}.", e, l))
                     }
@@ -721,6 +780,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
             // Word Placement Directive
             tokens.push(Token::new(&lcontent[0..4], TokenInfo::Directive));
             lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
+
+            if v {
+                println!("INFO: Word placement directive found on line {}.", l);
+            }
 
             let arg = immediate(&lcontent);
             match arg {
@@ -732,6 +795,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                             } else {
                                 if let ImmediateSize::Word = i.size {
                                     tokens.push(t);
+
+                                    if v {
+                                        println!("INFO: Numeric immediate {} found on line {}", &t.content, l);
+                                    }
                                 } else {
                                     Err(format!("Word placement directive with invalid argument (.wrd needs a word, not a byte) on line {}.", l))
                                 }
@@ -742,7 +809,17 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                 }
                 Err(e) => {
                     if e == String::from("e") {
-                        Err(format!("Word placement directive with invalid argument (.wrd needs a word immediate, not an address) on line {}.", l))
+                        let ident = identifier(&lcontent);
+                        match ident {
+                            Ok(t) => {
+                                tokens.push(t);
+
+                                if v {
+                                    println!("INFO: Identifier \"{}\" used on line {}.", &t.content, l);
+                                }
+                            }
+                            Err(e) => Err(format!("Word placement directive with invalid argument (.wrd needs a word immediate or a valid identifier (label/symbol)) on line {}.", l))
+                        }
                     } else {
                         Err(format!("{} on line {}.", e, l))
                     }
@@ -753,6 +830,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
             tokens.push(Token::new(&lcontent[0..4], TokenInfo::Directive));
             lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
 
+            if v {
+                println!("INFO: Vector placement directive found on line {}.", l);
+            }
+
             let arg = address(&lcontent);
             match arg {
                 Ok(t) => {
@@ -760,6 +841,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                         TokenInfo::Address(i) => {
                             if let AddressMode::AbsoluteMemory = i.mode {
                                 tokens.push(t);
+
+                                if v {
+                                    println!("INFO: Address {} found on line {}.", &t.content, l);
+                                }
                             } else {
                                 Err(format!("Vector placement directive with invalid argument (.vec needs an absolute memory address) on line {}.", l))
                             }
@@ -769,7 +854,17 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                 }
                 Err(e) => {
                     if e == String::from("e") {
-                        Err(format!("Vector placement directive with invalid argument (.vec needs an absolute memory address) on line {}.", l))
+                        let ident = identifier(&lcontent);
+                        match ident {
+                            Ok(t) => {
+                                tokens.push(t);
+
+                                if v {
+                                    println!("INFO: Identifier \"{}\" used on line {}.", &t.content, l);
+                                }
+                            }
+                            Err(e) => Err(format!("Vector placement directive with invalid argument (.vec needs an absolute memory address or a valid identifier (label/symbol)) on line {}.", l))
+                        }
                     } else {
                         Err(format!("{} on line {}.", e, l))
                     }
@@ -780,6 +875,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
             tokens.push(Token::new(&lcontent[0..4], TokenInfo::Directive));
             lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
 
+            if v {
+                println!("INFO: Zero-terminated ASCII string placement directive found on line {}.", l);
+            }
+
             let arg = immediate(&lcontent);
             match arg {
                 Ok(t) => {
@@ -788,6 +887,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                             if let ValueType::ASCII = i.vtype {
                                 if let ImmediateSize::String = i.size {
                                     tokens.push(t);
+
+                                    if v {
+                                        println!("String {} found on line {}.", &t.content, l);
+                                    }
                                 } else {
                                     Err(format!("String placement directive with invalid argument (.str can only take a string) on line {}.", l))
                                 }
@@ -821,6 +924,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                     if lcontent.to_lowercase().starts_with("adci") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'adci'?", l))
                     }
@@ -829,6 +936,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                     if lcontent.to_lowercase().starts_with("addi") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'addi'?", l))
                     }
@@ -840,6 +951,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                 if lcontent.to_lowercase().starts_with("and") {
                     tokens.push(Token::new(&lcontent[0..3], TokenInfo::Operation));
                     lcontent = lcontent.replacen(&lcontent[0..4], "", 1);
+
+                    if v {
+                        println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                    }
                 } else {
                     Err(format!("Unknown operation mnemonic on line {}. Did you mean 'and'?", l))
                 }
@@ -854,6 +969,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                     if lcontent.to_lowercase().starts_with("bequ") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'bequ'?", l))
                     }
@@ -867,9 +986,17 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                     if lcontent.to_lowercase().starts_with("bges") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else if lcontent.to_lowercase().starts_with("bgeu") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'bges' or 'bgeu'?", l))
                     }
@@ -878,9 +1005,17 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                     if lcontent.to_lowercase().starts_with("bgts") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else if lcontent.to_lowercase().starts_with("bgtu") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'bgts' or 'bgtu'?", l))
                     }
@@ -894,9 +1029,17 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                     if lcontent.to_lowercase().starts_with("bles") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else if lcontent.to_lowercase().starts_with("bleu") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'bles' or 'bleu'?", l))
                     }
@@ -905,9 +1048,17 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                     if lcontent.to_lowercase().starts_with("blts") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else if lcontent.to_lowercase().starts_with("bltu") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'blts' or 'bltu'?", l))
                     }
@@ -920,6 +1071,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                     if lcontent.to_lowercase().starts_with("bneq") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'bneq'?", l))
                     }
@@ -930,6 +1085,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                 // BRK
                 if lcontent.to_lowercase().starts_with("brk") {
                     tokens.push(Token::new(&lcontent[0..3], TokenInfo::Operation));
+
+                    if v {
+                        println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                    }
                 } else {
                     Err(format!("Unknown operation mnemonic on line {}. Did you mean 'brk'?", l))
                 }
@@ -944,6 +1103,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                     if lcontent.to_lowercase().starts_with("call") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'call'?", l))
                     }
@@ -956,9 +1119,17 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                     if lcontent.to_lowercase().starts_with("clr ") {
                         tokens.push(Token::new(&lcontent[0..3], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..4], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else if lcontent.to_lowercase().starts_with("clrf") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'clr' or 'clrf'?", l))
                     }
@@ -971,6 +1142,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                     if lcontent.to_lowercase().starts_with("cmpi") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'cmpi'?", l))
                     }
@@ -986,6 +1161,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                 if lcontent.to_lowercase().starts_with("hac") {
                     if lcontent.to_lowercase().starts_with("hacf") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'hacf'?", l))
                     }
@@ -1002,6 +1181,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                     if lcontent.to_lowercase().starts_with("jump") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'jump'?", l))
                     }
@@ -1017,6 +1200,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                 if lcontent.to_Lowercase().starts_with("mov") {
                     tokens.push(Token::new(&lcontent[0..3], TokenInfo::Operation));
                     lcontent = lcontent.replacen(&lcontent[0..4], "", 1);
+
+                    if v {
+                        println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                    }
                 } else {
                     Err(format!("Unknown operation mnemonic on line {}. Did you mean 'mov'?", l))
                 }
@@ -1028,9 +1215,17 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
             if lcontent.to_lowercase().starts_with("no") {
                 if lcontent.to_lowercase().starts_with("nop") {
                     tokens.push(Token::new(&lcontent[0..3], TokenInfo::Operation));
+
+                    if v {
+                        println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                    }
                 } else if lcontent.to_lowercase().starts_with("not") {
                     tokens.push(Token::new(&lcontent[0..3], TokenInfo::Operation));
                     lcontent = lcontent.replacen(&lcontent[0..4], "", 1);
+
+                    if v {
+                        println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                    }
                 } else {
                     Err(format!("Unknown operation mnemonic on line {}. Did you mean 'nop' or 'not'?", l))
                 }
@@ -1042,6 +1237,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
             if lcontent.to_lowercase().starts_with("or") {
                 tokens.push(Token::new(&lcontent[0..2], TokenInfo::Operation));
                 lcontent = lcontent.replacen(&lcontent[0..3], "", 1);
+
+                if v {
+                    println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                }
             } else {
                 Err(format!("Unknown operation mnemonic on line {}. Did you mean 'or'?", l))
             }
@@ -1053,6 +1252,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                     if lcontent.to_lowercase().starts_with("pcnt") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'pcnt'?", l))
                     }
@@ -1065,8 +1268,16 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                     if lcontent.to_lowercase().starts_with("pop ") {
                         tokens.push(Token::new(&lcontent[0..3], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..4], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else if lcontent.to_lowercase().starts_with("popf") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'pop' or 'popf'?", l))
                     }
@@ -1078,6 +1289,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                 if lcontent.to_lowercase().starts_with("psh") {
                     if lcontent.to_lowercase().starts_with("pshf") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'pshf'?", l))
                     }
@@ -1090,6 +1305,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                     if lcontent.to_lowercase().starts_with("push") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'push'?", l))
                     }
@@ -1106,8 +1325,16 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                 if lcontent.to_lowercase().starts_with("ret") {
                     if lcontent.to_lowercase().starts_with("reti") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else if lcontent.to_lowercase().starts_with("rets") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'reti' or 'rets'?", l))
                     }
@@ -1119,9 +1346,17 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                 if lcontent.to_lowercase().starts_with("rol") {
                     tokens.push(Token::new(&lcontent[0..3], TokenInfo::Operation));
                     lcontent = lcontent.replacen(&lcontent[0..4], "", 1);
+
+                    if v {
+                        println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                    }
                 } else if lcontent.to_lowercase().starts_with("ror") {
                     tokens.push(Token::new(&lcontent[0..3], TokenInfo::Operation));
                     lcontent = lcontent.replacen(&lcontent[0..4], "", 1);
+
+                    if v {
+                        println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                    }
                 } else {
                     Err(format!("Unknown operation mnemonic on line {}. Did you mean 'rol' or 'ror'?", l))
                 }
@@ -1136,6 +1371,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                     if lcontent.to_lowercase().starts_with("sbci") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'sbci'?", l))
                     }
@@ -1148,9 +1387,17 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                     if lcontent.to_lowercase().starts_with("set ") {
                         tokens.push(Token::new(&lcontent[0..3], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..4], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else if lcontent.to_lowercase().starts_with("setf") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'set' or 'setf'?", l))
                     }
@@ -1162,9 +1409,17 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                 if lcontent.to_lowercase().starts_with("shl") {
                     tokens.push(Token::new(&lcontent[0..3], TokenInfo::Operation));
                     lcontent = lcontent.replacen(&lcontent[0..4], "", 1);
+
+                    if v {
+                        println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                    }
                 } else if lcontent.to_lowercase().starts_with("shr") {
                     tokens.push(Token::new(&lcontent[0..3], TokenInfo::Operation));
                     lcontent = lcontent.replacen(&lcontent[0..4], "", 1);
+
+                    if v {
+                        println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                    }
                 } else {
                     Err(format!("Unknown operation mnemonic on line {}. Did you mean 'shl' or 'shr'?", l))
                 }
@@ -1174,6 +1429,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                     if lcontent.to_lowercase().starts_with("subi") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'subi'?", l))
                     }
@@ -1191,6 +1450,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                     if lcontent.to_lowercase().starts_with("test") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'test'?", l))
                     }
@@ -1203,6 +1466,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                     if lcontent.to_lowercase().starts_with("tstf") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'tstf'?", l))
                     }
@@ -1219,6 +1486,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                     if lcontent.to_lowercase().starts_with("vcnt") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
                         lcontent = lcontent.replacen(&lcontent[0..5], "", 1);
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'vcnt'?", l))
                     }
@@ -1234,6 +1505,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                 if lcontent.to_lowercase().starts_with("wai") {
                     if lcontent.to_lowercase().starts_with("wait") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
+
+                        if v {
+                            println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'wait'?", l))
                     }
@@ -1249,6 +1524,10 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                 if lcontent.to_lowercase().starts_with("xor") {
                     tokens.push(Token::new(&lcontent[0..3], TokenInfo::Operation));
                     lcontent = lcontent.replacen(&lcontent[0..4], "", 1);
+
+                    if v {
+                        println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                    }
                 } else {
                     Err(format!("Unknown operation mnemonic on line {}. Did you mean 'xor'?", l))
                 }
