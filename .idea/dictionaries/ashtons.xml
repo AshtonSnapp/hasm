@@ -1,16 +1,39 @@
 <component name="ProjectDictionaryState">
   <dictionary name="ashtons">
     <words>
+      <w>adci</w>
+      <w>bequ</w>
+      <w>bges</w>
+      <w>bgeu</w>
+      <w>bgts</w>
+      <w>bgtu</w>
+      <w>bles</w>
+      <w>bleu</w>
+      <w>bltu</w>
+      <w>bneq</w>
+      <w>clrf</w>
+      <w>cmpi</w>
       <w>futureproofing</w>
+      <w>hacf</w>
       <w>ident</w>
       <w>immediates</w>
       <w>inator</w>
       <w>lexes</w>
       <w>linecount</w>
       <w>mebibytes</w>
+      <w>pcnt</w>
+      <w>popf</w>
+      <w>pshf</w>
       <w>regid</w>
+      <w>reti</w>
+      <w>rets</w>
+      <w>sbci</w>
+      <w>setf</w>
+      <w>subi</w>
       <w>tokenizes</w>
       <w>tokline</w>
+      <w>tstf</w>
+      <w>vcnt</w>
       <w>vtype</w>
     </words>
   </dictionary>
