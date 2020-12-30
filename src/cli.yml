@@ -16,7 +16,7 @@ subcommands:
             index: 1
         - output:
             short: o
-            help: Sets the name of the output file
+            help: Sets the name of the output file. Default is the name of the source file, but .bin
             multiple: false
             takes_value: true
         - spt:

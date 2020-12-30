@@ -23,7 +23,22 @@ fn main() {
 
             let infile = Path::new(asm_matches.value_of("INPUT").unwrap());
             let spt = usize::from_str_radix(asm_matches.value_of("spt").unwrap(), 10).unwrap();
-            let tokens = lex::lex(infile, v, spt);
+            let poss_tokens = lex::lex(infile, v, spt);
+            match poss_tokens {
+                Ok(vt) => {
+                    todo!("Congratulations, your code was tokenized successfully! Unfortunately, neither the parser nor the tokens-to-JSON converter are implemented yet.");
+                }
+                Err(ve) => {
+                    if v {
+                        exit(1);
+                    } else {
+                        for err in ve {
+                            eprintln!("ERR: {}", err);
+                        }
+                        exit(1);
+                    }
+                }
+            }
         }
         _ => {}
     }

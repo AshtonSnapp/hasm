@@ -2559,8 +2559,8 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
 }
 
 /// Grabs a path, verbose mode flag, and spaces-per-tab count, and lexes the file.
-/// Really it just calls tokenize_line() in a loop until the end of the file is reached or an error occurs.
-/// Then it does a final run through, doing stuff that couldn't be done in tokenize_line(), before sending off a vector of vectors of tokens to main().
+/// Really it just calls tokenize_line() in a loop until the end of the file is reached.
+/// Then, if no errors occurred, it does a final run through, doing stuff that couldn't be done in tokenize_line(), before sending off a vector of vectors of tokens to main().
 pub fn lex(p: &Path, v: bool, spt: usize) -> Result<Vec<Vec<Token>>, Vec<String>> {
     let f = File::open(p).unwrap();
     let mut lines = BufReader::new(f).lines().map(|l| l.unwrap());
@@ -2602,6 +2602,11 @@ pub fn lex(p: &Path, v: bool, spt: usize) -> Result<Vec<Vec<Token>>, Vec<String>
     if errors.len() >=1 {
         Err(errors)
     } else {
+        /* Just remembered I have to do stuff before returning the tokens but I don't know how to implement it! Oh well.
+         * Need to create a list of all Identifier Tokens (using mutable references), and use that list to fill in missing identifier types.
+         * will need to implement a searching algorithm... also need to check if first definition occurs before or after first use
+         * symbols must be defined before they can be used, labels can be defined before or after they are used.
+         */
         Ok(tokens)
     }
 }
