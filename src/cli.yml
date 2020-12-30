@@ -16,7 +16,7 @@ subcommands:
             index: 1
         - output:
             short: o
-            help: Sets the name of the output binary file
+            help: Sets the name of the output file
             multiple: false
             takes_value: true
         - spt:
@@ -24,3 +24,7 @@ subcommands:
             help: Indicates the number of spaces that constitute a tab. Default is 4 spaces.
             takes_value: true
             default_value: 4
+        - tokens-only:
+            short: t
+            multiple: false
+            help: Output file should be a JSON'd token file instead of a binary file.
