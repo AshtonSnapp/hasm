@@ -22,8 +22,9 @@ subcommands:
         - spt:
             short: s
             help: Indicates the number of spaces that constitute a tab. Default is 4 spaces.
+            multiple: false
             takes_value: true
-            default_value: 4
+            default_value: "4"
         - tokens-only:
             short: t
             multiple: false
