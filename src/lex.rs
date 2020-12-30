@@ -961,8 +961,79 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
             } else {
                 Err(format!("Unknown operation mnemonic on line {}. Did you mean 'adci', 'addi', or 'and'?", l))
             }
+
+            let arg0 = (register(&lcontent), immediate(&lcontent), identifier(&lcontent));
+            match arg0.0 {
+                Ok(t) => {
+                    tokens.push(t);
+
+                    if v {
+                        println!("INFO: Register {} found on line {}.", &t.content, l);
+                    }
+
+                    lcontent = lcontent.replacen(&t.content, "", 1);
+                }
+                Err(e) => {
+                    match arg0.1 {
+                        Ok(t) => {
+                            if let TokenInfo::Immediate(i) = &t.info {
+                                if let ImmediateSize::String = i.size {
+                                    Err(format!("String used as operation argument on line {} (you can't do that, not directly at least).", l))
+                                } else {
+                                    tokens.push(t);
+
+                                    if v {
+                                        println!("INFO: Immediate {} found on line {}.", &t.content, l);
+                                    }
+
+                                    lcontent = lcontent.replacen(&t.content, "", 1);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            if e == String::from("e") {
+                                match arg0.2 {
+                                    Ok(t) => {
+                                        tokens.push(t);
+
+                                        if v {
+                                            println!("INFO: Identifier \"{}\" used on line {}.", &t.content, l);
+                                        }
+
+                                        lcontent = lcontent.replacen(&t.content, "", 1);
+                                    }
+                                    Err(e) => Err(format!("Arithmetic or logic operation with invalid first argument (must be a register, non-string immediate, or valid identifier (label/symbol)) on line {}.", l))
+                                }
+                            } else {
+                                Err(format!("{} on line {}.", e, l))
+                            }
+                        }
+                    }
+                }
+            }
+
+            if lcontent.starts_with(",") {
+                lcontent = lcontent.replacen(",", "", 1);
+            }
+
+            if lcontent.starts_with(" ") {
+                lcontent = lcontent.replacen(" ", "", 1);
+            }
+
+            let arg1 = register(&lcontent);
+            match arg1 {
+                Ok(t) => {
+                    tokens.push(t);
+
+                    if v {
+                        println!("INFO: Register {} found on line {}.", &t.content, l);
+                    }
+                }
+                Err(e) => Err(format!("Arithmetic or logic operation with invalid second argument (must be a register) on line {}.", l))
+            }
         } else if lcontent.to_lowercase().starts_with("b") {
             // BEQU, BGES, BGEU, BGTS, BGTU, BLES, BLEU, BLTS, BLTU, BNEQ, BRK
+            let mut branch = true;
             if lcontent.to_lowercase().starts_with("be") {
                 // BEQU
                 if lcontent.to_lowercase().starts_with("beq") {
@@ -1089,11 +1160,54 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                     if v {
                         println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
                     }
+
+                    branch = false;
                 } else {
                     Err(format!("Unknown operation mnemonic on line {}. Did you mean 'brk'?", l))
                 }
             } else {
                 Err(format!("Unknown operation mnemonic on line {}. Did you mean 'bequ', 'bges', 'bgeu', 'bgts', 'bgtu', 'bles', 'bleu', 'blts', 'bltu', 'bneq', or 'brk'?", l))
+            }
+
+            if branch {
+                let arg = (address(&lcontent), identifier(&lcontent));
+                match arg.0 {
+                    Ok(t) => {
+                        if let TokenInfo::Address(i) = &t.info {
+                            match &i.mode {
+                                AddressMode::AbsoluteMemory => {
+                                    tokens.push(t);
+
+                                    if v {
+                                        println!("INFO: Address {} found on line {}.", &t.content, l);
+                                    }
+                                }
+                                AddressMode::Relative(p) => {
+                                    if let Pointer::Instruction = p {
+                                        tokens.push(t);
+
+                                        if v {
+                                            println!("INFO: Address {} found on line {}.", &t.content, l);
+                                        }
+                                    } else {
+                                        Err(format!("Branch instruction with invalid argument (must be absolute memory address, instruction pointer relative address, or valid identifier) on line {}.", l))
+                                    }
+                                }
+                                _ => Err(format!("You should never see this message."))
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        if e == String::From("e") {
+                            match arg.1 {
+                                Ok(t) => {}
+                                Err(e) => Err(format!("Branch instruction with invalid argument (must be absolute memory address, instruction pointer relative address, or valid identifier) on line {}.", l))
+                            }
+                        } else {
+                            Err(format!("{} on line {}.", e, l))
+                        }
+                    }
+                }
             }
         } else if lcontent.to_lowercase().starts_with("c") {
             // CALL, CLR, CLRF, CMPI
@@ -1113,8 +1227,42 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                 } else {
                     Err(format!("Unknown operation mnemonic on line {}. Did you mean 'call'?", l))
                 }
+
+                let arg = (address(&lcontent), identifier(&lcontent));
+                match arg.0 {
+                    Ok(t) => {
+                        if let TokenInfo::Address(&i) = t.info {
+                            if let AddressMode::AbsoluteMemory = i.mode {
+                                tokens.push(t);
+
+                                if v {
+                                    println!("INFO: Address {} found on line {}.", &t.content, l);
+                                }
+                            } else {
+                                Err(format!("Subroutine call operation with invalid argument (must be an absolute memory address or valid identifier) on line {}.", l))
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        if e == String::from("e") {
+                            match arg.1 {
+                                Ok(t) => {
+                                    tokens.push(t);
+
+                                    if v {
+                                        println!("INFO: Identifier \"{}\" used on line {}", &t.content, i);
+                                    }
+                                }
+                                Err(e) => Err(format!("Subroutine call operation with invalid argument (must be an absolute memory address or valid identifier) on line {}.", l))
+                            }
+                        } else {
+                            Err(format!("{} on line {}.", e, l))
+                        }
+                    }
+                }
             } else if lcontent.to_lowercase().starts_with("cl") {
                 // CLR, CLRF
+                let mut flags = false;
                 if lcontent.to_lowercase().starts_with("clr") {
                     if lcontent.to_lowercase().starts_with("clr ") {
                         tokens.push(Token::new(&lcontent[0..3], TokenInfo::Operation));
@@ -1130,11 +1278,70 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                         if v {
                             println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
                         }
+
+                        flags = true;
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'clr' or 'clrf'?", l))
                     }
                 } else {
                     Err(format!("Unknown operation mnemonic on line {}. Did you mean 'clr' or 'clrf'?", l))
+                }
+
+                let arg0 = (immediate(&lcontent), identifier(&lcontent));
+                match arg0.0 {
+                    Ok(t) => {
+                        if let TokenInfo::Immediate(&i) = t.info {
+                            if let ValueType::ASCII = i.vtype {
+                                Err(format!("Bitwise operation with invalid argument (immediate cannot be ASCII) on line {}.", l))
+                            } else {
+                                tokens.push(t);
+
+                                if v {
+                                    println!("INFO: Immediate {} found on line {}.", &t.content, l);
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        if e == String::from("e") {
+                            match arg0.1 {
+                                Ok(t) => {
+                                    tokens.push(t);
+
+                                    if v {
+                                        println!("INFO: Identifier \"{}\" used on line {}.", &t.content, l);
+                                    }
+                                }
+                                Err(e) => Err(format!("Bitwise operation with invalid argument (needs a non-ASCII immediate or valid identifier) on line {}.", l))
+                            }
+                        } else {
+                            Err(format!("{} on line {}.", e, l))
+                        }
+                    }
+                }
+
+                if !flags {
+                    lcontent = lcontent.replacen(&tokens[tokens.len()-1], "", 1);
+
+                    if lcontent.starts_with(",") {
+                        lcontent = lcontent.replacen(",", "", 1);
+                    }
+
+                    if lcontent.starts_with(" ") {
+                        lcontent = lcontent.replacen(" ", "", 1);
+                    }
+
+                    let arg1 = register(&lcontent);
+                    match arg1 {
+                        Ok(t) => {
+                            tokens.push(t);
+
+                            if v {
+                                println!("INFO: Register '{}' found on line {}.", &t.content, l);
+                            }
+                        }
+                        Err(e) => Err(format!("Bitwise operation with invalid second argument (needs a valid register) on line {}.", l))
+                    }
                 }
             } else if lcontent.to_lowercase().starts_with("cm") {
                 // CMPI
@@ -1151,6 +1358,76 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                     }
                 } else {
                     Err(format!("Unknown operation mnemonic on line {}. Did you mean 'cmpi'?", l))
+                }
+
+                let arg0 = (register(&lcontent), immediate(&lcontent), identifier(&lcontent));
+                match arg0.0 {
+                    Ok(t) => {
+                        tokens.push(t);
+
+                        if v {
+                            println!("INFO: Register {} found on line {}.", &t.content, l);
+                        }
+
+                        lcontent = lcontent.replacen(&t.content, "", 1);
+                    }
+                    Err(e) => {
+                        match arg0.1 {
+                            Ok(t) => {
+                                if let TokenInfo::Immediate(i) = &t.info {
+                                    if let ImmediateSize::String = i.size {
+                                        Err(format!("String used as operation argument on line {} (you can't do that, not directly at least).", l))
+                                    } else {
+                                        tokens.push(t);
+
+                                        if v {
+                                            println!("INFO: Immediate {} found on line {}.", &t.content, l);
+                                        }
+
+                                        lcontent = lcontent.replacen(&t.content, "", 1);
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                if e == String::from("e") {
+                                    match arg0.2 {
+                                        Ok(t) => {
+                                            tokens.push(t);
+
+                                            if v {
+                                                println!("INFO: Identifier \"{}\" used on line {}.", &t.content, l);
+                                            }
+
+                                            lcontent = lcontent.replacen(&t.content, "", 1);
+                                        }
+                                        Err(e) => Err(format!("Comparison operation with invalid first argument (must be a register, non-string immediate, or valid identifier (label/symbol)) on line {}.", l))
+                                    }
+                                } else {
+                                    Err(format!("{} on line {}.", e, l))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if lcontent.starts_with(",") {
+                    lcontent = lcontent.replacen(",", "", 1);
+                }
+
+                if lcontent.starts_with(" ") {
+                    lcontent = lcontent.replacen(" ", "", 1);
+                }
+
+                let arg1 = register(&lcontent);
+                match arg1 {
+                    Ok(t) => {
+                        tokens.push(t);
+
+                        if v {
+                            println!("INFO: Register {} found on line {}.", &t.content, l);
+                        }
+                    }
+                    Err(e) => Err(format!("Comparison operation with invalid second argument (must be a register) on line {}.", l))
                 }
             } else {
                 Err(format!("Unknown operation mnemonic on line {}. Did you mean 'call', 'clr', 'clrf', or 'cmpi'?", l))
@@ -1194,6 +1471,51 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
             } else {
                 Err(format!("Unknown operation mnemonic on line {}. Did you mean 'jump'?", l))
             }
+
+            let arg = (address(&lcontent), identifier(&lcontent));
+            match arg.0 {
+                Ok(t) => {
+                    if let TokenInfo::Address(i) = &t.info {
+                        match &i.mode {
+                            AddressMode::AbsoluteMemory => {
+                                tokens.push(t);
+
+                                if v {
+                                    println!("INFO: Address {} found on line {}.", &t.content, l);
+                                }
+                            }
+                            AddressMode::Relative(p) => {
+                                if let Pointer::Instruction = p {
+                                    tokens.push(t);
+
+                                    if v {
+                                        println!("INFO: Address {} found on line {}.", &t.content, l);
+                                    }
+                                } else {
+                                    Err(format!("Jump operation with invalid argument (must be absolute memory address, instruction pointer relative address, or valid identifier) on line {}.", l))
+                                }
+                            }
+                            _ => Err(format!("You should never see this message."))
+                        }
+                    }
+                }
+                Err(e) => {
+                    if e == String::From("e") {
+                        match arg.1 {
+                            Ok(t) => {
+                                tokens.push(t);
+
+                                if v {
+                                    println!("INFO: Identifier \"{}\" used on line {}.", &t.content, l);
+                                }
+                            }
+                            Err(e) => Err(format!("Jump operation with invalid argument (must be absolute memory address, instruction pointer relative address, or valid identifier) on line {}.", l))
+                        }
+                    } else {
+                        Err(format!("{} on line {}.", e, l))
+                    }
+                }
+            }
         } else if lcontent.to_lowercase().starts_with("m") {
             // MOV
             if lcontent.to_lowercase().starts_with("mo") {
@@ -1210,6 +1532,149 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
             } else {
                 Err(format!("Unknown operation mnemonic on line {}. Did you mean 'mov'?", l))
             }
+
+            let arg0 = (address(&lcontent), immediate(&lcontent), identifier(&lcontent), register(&lcontent));
+            match arg0.0 {
+                Ok(t) => {
+                    tokens.push(t);
+
+                    if v {
+                        println!("INFO: Address {} found on line {}.", &t.content, l);
+                    }
+
+                    lcontent = lcontent.replacen(&t.content, "", 1);
+                }
+                Err(e) => {
+                    if e == String::from("e") {
+                        match arg0.1 {
+                            Ok(t) => {
+                                if let TokenInfo::Immediate(i) = &t.info {
+                                    if let ValueType::ASCII = i.vtype {
+                                        if let ImmediateSize::Character = i.size {
+                                            tokens.push(t);
+                                        } else {
+                                            Err(format!("Move operation with invalid first argument (cannot handle string immediates) on line {}.", l))
+                                        }
+                                    } else {
+                                        tokens.push(t);
+                                    }
+                                }
+
+                                if v {
+                                    println!("INFO: Immediate {} found on line {}.", &t.content, l);
+                                }
+
+                                lcontent = lcontent.replacen(&t.content, "", 1);
+                            }
+                            Err(e) => {
+                                if e == String::from("e") {
+                                    match arg0.2 {
+                                        Ok(t) => {
+                                            tokens.push(t);
+
+                                            if v {
+                                                println!("INFO: Identifier \"{}\" used on line {}.", &t.content, l);
+                                            }
+
+                                            lcontent = lcontent.replacen(&t.content, "", 1);
+                                        }
+                                        Err(e) => match arg0.3 {
+                                            Ok(t) => {
+                                                tokens.push(t);
+
+                                                if v {
+                                                    println!("INFO: Register {} found on line {}.", &t.content, l);
+                                                }
+
+                                                lcontent = lcontent.replacen(&t.content, "", 1);
+                                            }
+                                            Err(e) => Err(format!("Move operation with invalid first argument (must be an address, a non-string immediate, a valid identifier, or a register) on line {}.", l))
+                                        }
+                                    }
+                                } else {
+                                    Err(format!("{} on line {}.", e, l))
+                                }
+                            }
+                        }
+                    } else {
+                        Err(format!("{} on line {}.", e, l))
+                    }
+                }
+            }
+
+            if lcontent.starts_with(",") {
+                lcontent = lcontent.replacen(",", "", 1);
+            }
+
+            if lcontent.starts_with(" ") {
+                lcontent = lcontent.replacen(" ", "", 1);
+            }
+
+            let arg1 = (address(&lcontent), identifier(&lcontent), register(&lcontent));
+            match arg1.0 {
+                Ok(t) => {
+                    tokens.push(t);
+
+                    if v {
+                        println!("INFO: Address {} found on line {}.", &t.content, l);
+                    }
+
+                    lcontent = lcontent.replacen(&t.content, "", 1);
+                }
+                Err(e) => {
+                    if e == String::from("e") {
+                        match arg1.1 {
+                            Ok(t) => {
+                                tokens.push(t);
+
+                                if v {
+                                    println!("INFO: Identifier \"{}\" used on line {}.", &t.content, l);
+                                }
+
+                                lcontent = lcontent.replacen(&t.content, "", 1);
+                            }
+                            Err(e) => match arg1.2 {
+                                Ok(t) => {
+                                    tokens.push(t);
+
+                                    if v {
+                                        println!("INFO: Register {} found on line {}.", &t.content, l);
+                                    }
+
+                                    lcontent = lcontent.replacen(&t.content, "", 1);
+                                }
+                                Err(e) => Err(format!("Move operation with invalid second argument (must be an address, a valid identifier, or a register) on line {}.", l))
+                            }
+                        }
+                    } else {
+                        Err(format!("{} on line {}.", e, l))
+                    }
+                }
+            }
+
+            if lcontent.starts_with(",") || lcontent.starts_with(" ") {
+                if lcontent.starts_with(",") {
+                    lcontent = lcontent.replacen(",", "", 1);
+                } else if lcontent.starts_with(" ") {
+                    lcontent = lcontent.replacen(" ", "", 1);
+                }
+
+                let arg2 = register(&lcontent);
+                match arg2 {
+                    Ok(t) => {
+                        if &t.content == String::from("iX") || &t.content == String::from("iY") {
+                            tokens.push(t);
+
+                            if v {
+                                println!("INFO: Index register {} found on line {}.", &t.content, l);
+                            }
+                        } else {
+                            Err(format!("Indexed move operation with invalid index argument (must be an index register) on line {}.", l))
+                        }
+                    }
+                    Err(e) => Err(format!("Indexed move operation with invalid index argument (must be an index register) on line {}. Did you add extra spaces or something?", l))
+                }
+            }
         } else if lcontent.to_lowercase().starts_with("n") {
             // NOP, NOT
             if lcontent.to_lowercase().starts_with("no") {
@@ -1225,6 +1690,18 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
 
                     if v {
                         println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                    }
+
+                    let arg = register(&lcontent);
+                    match arg {
+                        Ok(t) => {
+                            tokens.push(t);
+
+                            if v {
+                                println!("Register {} found on line {}.", &t.content, l);
+                            }
+                        }
+                        Err(e) => Err(format!("Logic operation with invalid argument (must be a register) on line {}.", l))
                     }
                 } else {
                     Err(format!("Unknown operation mnemonic on line {}. Did you mean 'nop' or 'not'?", l))
@@ -1244,6 +1721,76 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
             } else {
                 Err(format!("Unknown operation mnemonic on line {}. Did you mean 'or'?", l))
             }
+
+            let arg0 = (register(&lcontent), immediate(&lcontent), identifier(&lcontent));
+            match arg0.0 {
+                Ok(t) => {
+                    tokens.push(t);
+
+                    if v {
+                        println!("INFO: Register {} found on line {}.", &t.content, l);
+                    }
+
+                    lcontent = lcontent.replacen(&t.content, "", 1);
+                }
+                Err(e) => {
+                    match arg0.1 {
+                        Ok(t) => {
+                            if let TokenInfo::Immediate(i) = &t.info {
+                                if let ImmediateSize::String = i.size {
+                                    Err(format!("String used as operation argument on line {} (you can't do that, not directly at least).", l))
+                                } else {
+                                    tokens.push(t);
+
+                                    if v {
+                                        println!("INFO: Immediate {} found on line {}.", &t.content, l);
+                                    }
+
+                                    lcontent = lcontent.replacen(&t.content, "", 1);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            if e == String::from("e") {
+                                match arg0.2 {
+                                    Ok(t) => {
+                                        tokens.push(t);
+
+                                        if v {
+                                            println!("INFO: Identifier \"{}\" used on line {}.", &t.content, l);
+                                        }
+
+                                        lcontent = lcontent.replacen(&t.content, "", 1);
+                                    }
+                                    Err(e) => Err(format!("Logic operation with invalid first argument (must be a register, non-string immediate, or valid identifier (label/symbol)) on line {}.", l))
+                                }
+                            } else {
+                                Err(format!("{} on line {}.", e, l))
+                            }
+                        }
+                    }
+                }
+            }
+
+            if lcontent.starts_with(",") {
+                lcontent = lcontent.replacen(",", "", 1);
+            }
+
+            if lcontent.starts_with(" ") {
+                lcontent = lcontent.replacen(" ", "", 1);
+            }
+
+            let arg1 = register(&lcontent);
+            match arg1 {
+                Ok(t) => {
+                    tokens.push(t);
+
+                    if v {
+                        println!("INFO: Register {} found on line {}.", &t.content, l);
+                    }
+                }
+                Err(e) => Err(format!("Logic operation with invalid second argument (must be a register) on line {}.", l))
+            }
         } else if lcontent.to_lowercase().starts_with("p") {
             // PCNT, POP, POPF, PSHF, PUSH
             if lcontent.to_lowercase().starts_with("pc") {
@@ -1262,6 +1809,30 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                 } else {
                     Err(format!("Unknown operation mnemonic on line {}. Did you mean 'pcnt'?", l))
                 }
+
+                let arg0 = register(&lcontent);
+                match arg0 {
+                    Ok(t) => {
+                        tokens.push(t);
+
+                        if v {
+                            println!("Register {} found on line {}.", &t.content, l);
+                        }
+                    }
+                    Err(e) => Err(format!("Logic operation with invalid first argument (must be a register) on line {}.", l))
+                }
+
+                let arg1 = register(&lcontent);
+                match arg1 {
+                    Ok(t) => {
+                        tokens.push(t);
+
+                        if v {
+                            println!("Register {} found on line {}.", &t.content, l);
+                        }
+                    }
+                    Err(e) => Err(format!("Logic operation with invalid second argument (must be a register) on line {}.", l))
+                }
             } else if lcontent.to_lowercase().starts_with("po") {
                 // POP, POPF
                 if lcontent.to_lowercase().starts_with("pop") {
@@ -1271,6 +1842,18 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
 
                         if v {
                             println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
+                        }
+
+                        let arg = register(&lcontent);
+                        match arg {
+                            Ok(t) => {
+                                tokens.push(t);
+
+                                if v {
+                                    println!("Register {} found on line {}.", &t.content, l);
+                                }
+                            }
+                            Err(e) => Err(format!("Stack operation with invalid argument (must be a register) on line {}.", l))
                         }
                     } else if lcontent.to_lowercase().starts_with("popf") {
                         tokens.push(Token::new(&lcontent[0..4], TokenInfo::Operation));
@@ -1314,6 +1897,18 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                     }
                 } else {
                     Err(format!("Unknown operation mnemonic on line {}. Did you mean 'push'?", l))
+                }
+
+                let arg = register(&lcontent);
+                match arg {
+                    Ok(t) => {
+                        tokens.push(t);
+
+                        if v {
+                            println!("Register {} found on line {}.", &t.content, l);
+                        }
+                    }
+                    Err(e) => Err(format!("Stack operation with invalid argument (must be a register) on line {}.", l))
                 }
             } else {
                 Err(format!("Unknown operation mnemonic on line {}. Did you mean 'pcnt', 'pop', 'popf', 'pshf', or 'push'?", l))
@@ -1360,6 +1955,18 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                 } else {
                     Err(format!("Unknown operation mnemonic on line {}. Did you mean 'rol' or 'ror'?", l))
                 }
+
+                let arg = register(&lcontent);
+                match arg {
+                    Ok(t) => {
+                        tokens.push(t);
+
+                        if v {
+                            println!("Register {} found on line {}.", &t.content, l);
+                        }
+                    }
+                    Err(e) => Err(format!("Logic operation with invalid argument (must be a register) on line {}.", l))
+                }
             } else {
                 Err(format!("Unknown operation mnemonic on line {}. Did you mean 'reti', 'rets', 'rol', or 'ror'?", l))
             }
@@ -1381,8 +1988,79 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                 } else {
                     Err(format!("Unknown operation mnemonic on line {}. Did you mean 'sbci'?", l))
                 }
+
+                let arg0 = (register(&lcontent), immediate(&lcontent), identifier(&lcontent));
+                match arg0.0 {
+                    Ok(t) => {
+                        tokens.push(t);
+
+                        if v {
+                            println!("INFO: Register {} found on line {}.", &t.content, l);
+                        }
+
+                        lcontent = lcontent.replacen(&t.content, "", 1);
+                    }
+                    Err(e) => {
+                        match arg0.1 {
+                            Ok(t) => {
+                                if let TokenInfo::Immediate(i) = &t.info {
+                                    if let ImmediateSize::String = i.size {
+                                        Err(format!("String used as operation argument on line {} (you can't do that, not directly at least).", l))
+                                    } else {
+                                        tokens.push(t);
+
+                                        if v {
+                                            println!("INFO: Immediate {} found on line {}.", &t.content, l);
+                                        }
+
+                                        lcontent = lcontent.replacen(&t.content, "", 1);
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                if e == String::from("e") {
+                                    match arg0.2 {
+                                        Ok(t) => {
+                                            tokens.push(t);
+
+                                            if v {
+                                                println!("INFO: Identifier \"{}\" used on line {}.", &t.content, l);
+                                            }
+
+                                            lcontent = lcontent.replacen(&t.content, "", 1);
+                                        }
+                                        Err(e) => Err(format!("Arithmetic operation with invalid first argument (must be a register, non-string immediate, or valid identifier (label/symbol)) on line {}.", l))
+                                    }
+                                } else {
+                                    Err(format!("{} on line {}.", e, l))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if lcontent.starts_with(",") {
+                    lcontent = lcontent.replacen(",", "", 1);
+                }
+
+                if lcontent.starts_with(" ") {
+                    lcontent = lcontent.replacen(" ", "", 1);
+                }
+
+                let arg1 = register(&lcontent);
+                match arg1 {
+                    Ok(t) => {
+                        tokens.push(t);
+
+                        if v {
+                            println!("INFO: Register {} found on line {}.", &t.content, l);
+                        }
+                    }
+                    Err(e) => Err(format!("Arithmetic operation with invalid second argument (must be a register) on line {}.", l))
+                }
             } else if lcontent.to_lowercase().starts_with("se") {
                 // SET, SETF
+                let mut flags = false;
                 if lcontent.to_lowercase().starts_with("set") {
                     if lcontent.to_lowercase().starts_with("set ") {
                         tokens.push(Token::new(&lcontent[0..3], TokenInfo::Operation));
@@ -1398,11 +2076,70 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                         if v {
                             println!("INFO: Operation '{}' found on line {}.", tokens[tokens.len()-1], l);
                         }
+
+                        flags = true;
                     } else {
                         Err(format!("Unknown operation mnemonic on line {}. Did you mean 'set' or 'setf'?", l))
                     }
                 } else {
                     Err(format!("Unknown operation mnemonic on line {}. Did you mean 'set' or 'setf'?", l))
+                }
+
+                let arg0 = (immediate(&lcontent), identifier(&lcontent));
+                match arg0.0 {
+                    Ok(t) => {
+                        if let TokenInfo::Immediate(&i) = t.info {
+                            if let ValueType::ASCII = i.vtype {
+                                Err(format!("Bitwise operation with invalid argument (immediate cannot be ASCII) on line {}.", l))
+                            } else {
+                                tokens.push(t);
+
+                                if v {
+                                    println!("INFO: Immediate {} found on line {}.", &t.content, l);
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        if e == String::from("e") {
+                            match arg0.1 {
+                                Ok(t) => {
+                                    tokens.push(t);
+
+                                    if v {
+                                        println!("INFO: Identifier \"{}\" used on line {}.", &t.content, l);
+                                    }
+                                }
+                                Err(e) => Err(format!("Bitwise operation with invalid argument (needs a non-ASCII immediate or valid identifier) on line {}.", l))
+                            }
+                        } else {
+                            Err(format!("{} on line {}.", e, l))
+                        }
+                    }
+                }
+
+                if !flags {
+                    lcontent = lcontent.replacen(&tokens[tokens.len()-1], "", 1);
+
+                    if lcontent.starts_with(",") {
+                        lcontent = lcontent.replacen(",", "", 1);
+                    }
+
+                    if lcontent.starts_with(" ") {
+                        lcontent = lcontent.replacen(" ", "", 1);
+                    }
+
+                    let arg1 = register(&lcontent);
+                    match arg1 {
+                        Ok(t) => {
+                            tokens.push(t);
+
+                            if v {
+                                println!("INFO: Register '{}' found on line {}.", &t.content, l);
+                            }
+                        }
+                        Err(e) => Err(format!("Bitwise operation with invalid second argument (needs a valid register) on line {}.", l))
+                    }
                 }
             } else if lcontent.to_lowercase().starts_with("sh") {
                 // SHL, SHR
@@ -1423,6 +2160,18 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                 } else {
                     Err(format!("Unknown operation mnemonic on line {}. Did you mean 'shl' or 'shr'?", l))
                 }
+
+                let arg = register(&lcontent);
+                match arg {
+                    Ok(t) => {
+                        tokens.push(t);
+
+                        if v {
+                            println!("Register {} found on line {}.", &t.content, l);
+                        }
+                    }
+                    Err(e) => Err(format!("Logic operation with invalid argument (must be a register) on line {}.", l))
+                }
             } else if lcontent.to_lowercase().starts_with("su") {
                 // SUBI
                 if lcontent.to_lowercase().starts_with("sub") {
@@ -1439,11 +2188,82 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                 } else {
                     Err(format!("Unknown operation mnemonic on line {}. Did you mean 'subi'?", l))
                 }
+
+                let arg0 = (register(&lcontent), immediate(&lcontent), identifier(&lcontent));
+                match arg0.0 {
+                    Ok(t) => {
+                        tokens.push(t);
+
+                        if v {
+                            println!("INFO: Register {} found on line {}.", &t.content, l);
+                        }
+
+                        lcontent = lcontent.replacen(&t.content, "", 1);
+                    }
+                    Err(e) => {
+                        match arg0.1 {
+                            Ok(t) => {
+                                if let TokenInfo::Immediate(i) = &t.info {
+                                    if let ImmediateSize::String = i.size {
+                                        Err(format!("String used as operation argument on line {} (you can't do that, not directly at least).", l))
+                                    } else {
+                                        tokens.push(t);
+
+                                        if v {
+                                            println!("INFO: Immediate {} found on line {}.", &t.content, l);
+                                        }
+
+                                        lcontent = lcontent.replacen(&t.content, "", 1);
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                if e == String::from("e") {
+                                    match arg0.2 {
+                                        Ok(t) => {
+                                            tokens.push(t);
+
+                                            if v {
+                                                println!("INFO: Identifier \"{}\" used on line {}.", &t.content, l);
+                                            }
+
+                                            lcontent = lcontent.replacen(&t.content, "", 1);
+                                        }
+                                        Err(e) => Err(format!("Arithmetic operation with invalid first argument (must be a register, non-string immediate, or valid identifier (label/symbol)) on line {}.", l))
+                                    }
+                                } else {
+                                    Err(format!("{} on line {}.", e, l))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if lcontent.starts_with(",") {
+                    lcontent = lcontent.replacen(",", "", 1);
+                }
+
+                if lcontent.starts_with(" ") {
+                    lcontent = lcontent.replacen(" ", "", 1);
+                }
+
+                let arg1 = register(&lcontent);
+                match arg1 {
+                    Ok(t) => {
+                        tokens.push(t);
+
+                        if v {
+                            println!("INFO: Register {} found on line {}.", &t.content, l);
+                        }
+                    }
+                    Err(e) => Err(format!("Arithmetic operation with invalid second argument (must be a register) on line {}.", l))
+                }
             } else {
                 Err(format!("Unknown operation mnemonic on line {}. Did you mean 'sbci', 'set', 'setf', 'shl', 'shr', or 'subi'?", l))
             }
         } else if lcontent.to_lowercase().starts_with("t") {
             // TEST, TSTF
+            let mut flags = false;
             if lcontent.to_lowercase().starts_with("te") {
                 // TEST
                 if lcontent.to_lowercase().starts_with("tes") {
@@ -1479,6 +2299,63 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
             } else {
                 Err(format!("Unknown operation mnemonic on line {}. Did you mean 'test' or 'tstf'?", l))
             }
+
+            let arg0 = (immediate(&lcontent), identifier(&lcontent));
+            match arg0.0 {
+                Ok(t) => {
+                    if let TokenInfo::Immediate(&i) = t.info {
+                        if let ValueType::ASCII = i.vtype {
+                            Err(format!("Bitwise operation with invalid argument (immediate cannot be ASCII) on line {}.", l))
+                        } else {
+                            tokens.push(t);
+
+                            if v {
+                                println!("INFO: Immediate {} found on line {}.", &t.content, l);
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    if e == String::from("e") {
+                        match arg0.1 {
+                            Ok(t) => {
+                                tokens.push(t);
+
+                                if v {
+                                    println!("INFO: Identifier \"{}\" used on line {}.", &t.content, l);
+                                }
+                            }
+                            Err(e) => Err(format!("Bitwise operation with invalid argument (needs a non-ASCII immediate or valid identifier) on line {}.", l))
+                        }
+                    } else {
+                        Err(format!("{} on line {}.", e, l))
+                    }
+                }
+            }
+
+            if !flags {
+                lcontent = lcontent.replacen(&tokens[tokens.len()-1], "", 1);
+
+                if lcontent.starts_with(",") {
+                    lcontent = lcontent.replacen(",", "", 1);
+                }
+
+                if lcontent.starts_with(" ") {
+                    lcontent = lcontent.replacen(" ", "", 1);
+                }
+
+                let arg1 = register(&lcontent);
+                match arg1 {
+                    Ok(t) => {
+                        tokens.push(t);
+
+                        if v {
+                            println!("INFO: Register '{}' found on line {}.", &t.content, l);
+                        }
+                    }
+                    Err(e) => Err(format!("Bitwise operation with invalid second argument (needs a valid register) on line {}.", l))
+                }
+            }
         } else if lcontent.to_lowercase().starts_with("v") {
             // VCNT
             if lcontent.to_lowercase().starts_with("vc") {
@@ -1498,6 +2375,30 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                 }
             } else {
                 Err(format!("Unknown operation mnemonic on line {}. Did you mean 'vcnt'?", l))
+            }
+
+            let arg0 = register(&lcontent);
+            match arg0 {
+                Ok(t) => {
+                    tokens.push(t);
+
+                    if v {
+                        println!("Register {} found on line {}.", &t.content, l);
+                    }
+                }
+                Err(e) => Err(format!("Logic operation with invalid first argument (must be a register) on line {}.", l))
+            }
+
+            let arg1 = register(&lcontent);
+            match arg1 {
+                Ok(t) => {
+                    tokens.push(t);
+
+                    if v {
+                        println!("Register {} found on line {}.", &t.content, l);
+                    }
+                }
+                Err(e) => Err(format!("Logic operation with invalid second argument (must be a register) on line {}.", l))
             }
         } else if lcontent.to_lowercase().starts_with("w") {
             // WAIT
@@ -1533,6 +2434,76 @@ fn tokenize_line(lc: &str, v: bool, spt: usize, l: usize) -> Result<Vec<Token>, 
                 }
             } else {
                 Err(format!("Unknown operation mnemonic on line {}. Did you mean 'xor'?", l))
+            }
+
+            let arg0 = (register(&lcontent), immediate(&lcontent), identifier(&lcontent));
+            match arg0.0 {
+                Ok(t) => {
+                    tokens.push(t);
+
+                    if v {
+                        println!("INFO: Register {} found on line {}.", &t.content, l);
+                    }
+
+                    lcontent = lcontent.replacen(&t.content, "", 1);
+                }
+                Err(e) => {
+                    match arg0.1 {
+                        Ok(t) => {
+                            if let TokenInfo::Immediate(i) = &t.info {
+                                if let ImmediateSize::String = i.size {
+                                    Err(format!("String used as operation argument on line {} (you can't do that, not directly at least).", l))
+                                } else {
+                                    tokens.push(t);
+
+                                    if v {
+                                        println!("INFO: Immediate {} found on line {}.", &t.content, l);
+                                    }
+
+                                    lcontent = lcontent.replacen(&t.content, "", 1);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            if e == String::from("e") {
+                                match arg0.2 {
+                                    Ok(t) => {
+                                        tokens.push(t);
+
+                                        if v {
+                                            println!("INFO: Identifier \"{}\" used on line {}.", &t.content, l);
+                                        }
+
+                                        lcontent = lcontent.replacen(&t.content, "", 1);
+                                    }
+                                    Err(e) => Err(format!("Arithmetic operation with invalid first argument (must be a register, non-string immediate, or valid identifier (label/symbol)) on line {}.", l))
+                                }
+                            } else {
+                                Err(format!("{} on line {}.", e, l))
+                            }
+                        }
+                    }
+                }
+            }
+
+            if lcontent.starts_with(",") {
+                lcontent = lcontent.replacen(",", "", 1);
+            }
+
+            if lcontent.starts_with(" ") {
+                lcontent = lcontent.replacen(" ", "", 1);
+            }
+
+            let arg1 = register(&lcontent);
+            match arg1 {
+                Ok(t) => {
+                    tokens.push(t);
+
+                    if v {
+                        println!("INFO: Register {} found on line {}.", &t.content, l);
+                    }
+                }
+                Err(e) => Err(format!("Arithmetic operation with invalid second argument (must be a register) on line {}.", l))
             }
         } else {
             Err(format!("Unknown operation mnemonic on line {}.", l))
