@@ -2604,7 +2604,7 @@ pub fn lex(p: &Path, v: bool, spt: usize) -> Result<Vec<Vec<Token>>, Vec<String>
     } else {
         /* Just remembered I have to do stuff before returning the tokens but I don't know how to implement it! Oh well.
          * Need to create a list of all Identifier Tokens (using mutable references), and use that list to fill in missing identifier types.
-         * will need to implement a searching algorithm... also need to check if first definition occurs before or after first use
+         * will need to implement or import a searching algorithm... also need to check if first definition occurs before or after first use
          * symbols must be defined before they can be used, labels can be defined before or after they are used.
          */
         Ok(tokens)
