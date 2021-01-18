@@ -2569,7 +2569,7 @@ pub fn lex(p: &Path, v: bool, spt: usize) -> Result<Vec<Vec<Token>>, Vec<String>
     let mut tokens: Vec<Vec<Token>> = vec!();
     let mut errors: Vec<String> = vec!();
     for line in lines {
-        let tokline = tokenize_line(&line, v, spt, linecount);
+        let mut tokline = tokenize_line(&line, v, spt, linecount);
         match tokline {
             Ok(t) => {
                 tokens.push(t);
@@ -2599,14 +2599,75 @@ pub fn lex(p: &Path, v: bool, spt: usize) -> Result<Vec<Vec<Token>>, Vec<String>
         linecount = linecount + 1;
     }
 
+    let mut tokens_ref = tokens.iter_mut().flat_map(|line| line.iter_mut());
+    let mut idents_ref: Vec<&mut Token> = vec!();
+    let mut known_idents: Vec<Token> = vec!();
+
+    for token in tokens_ref {
+        if let TokenInfo::Identifier(i) = &token.info {
+            idents_ref.push(token);
+        }
+    }
+
+    // PASS ONE -- Locate all defined identifiers and copy them to known_idents.
+    for ident in &idents_ref {
+        if let TokenInfo::Identifier(i) = &ident.info {
+            if let Some(IdentifierType::Label) = i {
+                // Label
+                known_idents.push(Token::new(&ident.content, TokenInfo::Identifier(Some(IdentifierType::Label))));
+            } else if let Some(IdentifierType::Symbol) = i {
+                // Symbol
+                known_idents.push(Token::new(&ident.content, TokenInfo::Identifier(Some(IdentifierType::Symbol))));
+            }
+        }
+    }
+
+    // PASS TWO -- Locate all used identifiers and check them against known_idents to find their type.
+    for mut ident in &mut idents_ref {
+        if let TokenInfo::Identifier(i) = &mut ident.info {
+            if let None = i {
+                for known_ident in &known_idents {
+                    if let TokenInfo::Identifier(i2) = &known_ident.info {
+                        if &known_ident.content == &ident.content {
+                            if let Some(IdentifierType::Label) = i2 {
+                                // Label
+                                *i = Some(IdentifierType::Label);
+                            } else if let Some(IdentifierType::Symbol) = i2 {
+                                // Symbol
+                                *i = Some(IdentifierType::Symbol);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // PASS THREE -- Locate all undefined identifiers and error.
+    for ident in &idents_ref {
+        if let TokenInfo::Identifier(i) = &ident.info {
+            if let None = i {
+                if v {
+                    eprintln!("ERR: Identifier \"{}\" undefined.", &ident.content);
+
+                    /* I did it like this for two reasons:
+                     * [1] We need at least one item in this vector to return with Result::Err.
+                     * [2] main() knows whether it is verbose mode, so it'll know to just quit if it is.
+                     */
+                    if errors.is_empty() {
+                        errors.push(format!("Identifier \"{}\" undefined.", &ident.content));
+                    }
+
+                } else {
+                    errors.push(format!("Identifier \"{}\" undefined.", &ident.content));
+                }
+            }
+        }
+    }
+
     if errors.len() >=1 {
         Err(errors)
     } else {
-        /* Just remembered I have to do stuff before returning the tokens but I don't know how to implement it! Oh well.
-         * Need to create a list of all Identifier Tokens (using mutable references), and use that list to fill in missing identifier types.
-         * will need to implement or import a searching algorithm... also need to check if first definition occurs before or after first use
-         * symbols must be defined before they can be used, labels can be defined before or after they are used.
-         */
         Ok(tokens)
     }
 }

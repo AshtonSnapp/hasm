@@ -11,6 +11,7 @@
       <w>bleu</w>
       <w>bltu</w>
       <w>bneq</w>
+      <w>cellia</w>
       <w>clrf</w>
       <w>cmpi</w>
       <w>futureproofing</w>
@@ -29,6 +30,7 @@
       <w>rets</w>
       <w>sbci</w>
       <w>setf</w>
+      <w>snapp</w>
       <w>subi</w>
       <w>tokenizes</w>
       <w>tokline</w>
