@@ -48,7 +48,9 @@ fn main() {
                                             let res = f.write(&t);
                                             match res {
                                                 Ok(b) => {
-                                                    println!("INFO: Successfully written {} bytes to file \"{}\".", b, outfile_name);
+                                                    if v {
+                                                        println!("INFO: Successfully written {} bytes to file \"{}\".", b, outfile_name);
+                                                    }
                                                 }
                                                 Err(e) => {
                                                     eprintln!("ERR: Failed to write to file \"{}\".", outfile_name);
@@ -67,7 +69,49 @@ fn main() {
                                     exit(1);
                                 }
                             }
-                        } else {}
+                        } else {
+                            let mut outfile_name = String::from(asm_matches.value_of("INPUT").unwrap());
+
+                            if outfile_name.contains(".") {
+                                let mid = outfile_name.find(".").unwrap();
+                                outfile_name = String::from(outfile_name.split_at(mid).0);
+                            }
+
+                            outfile_name.push_str("-tokens.json");
+
+                            let outpath = Path::new(&outfile_name);
+
+                            let out = serde_json::to_vec_pretty(&vt);
+                            match out {
+                                Ok(t) => {
+                                    let outfile = File::create(outpath);
+                                    match outfile {
+                                        Ok(mut f) => {
+                                            let res = f.write(&t);
+                                            match res {
+                                                Ok(b) => {
+                                                    if v {
+                                                        println!("INFO: Successfully written {} bytes to file \"{}\".", b, outfile_name);
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    eprintln!("ERR: Failed to write to file \"{}\".", outfile_name);
+                                                    exit(1);
+                                                }
+                                            }
+                                        }
+                                        Err(e) => {
+                                            eprintln!("ERR: Failed to create or open file \"{}\".", outfile_name);
+                                            exit(1);
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!("ERR: Failed to make list of list of tokens into JSON. serde failed us :(");
+                                    exit(1);
+                                }
+                            }
+                        }
                     } else {
                         todo!("My apologies, but the parser is not implemented yet. Try using -t. Otherwise, no errors occurred during lexical analysis.");
                     }
