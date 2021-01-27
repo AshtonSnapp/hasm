@@ -22,6 +22,7 @@
       <w>lexes</w>
       <w>linecount</w>
       <w>mebibytes</w>
+      <w>outpath</w>
       <w>pcnt</w>
       <w>popf</w>
       <w>pshf</w>
@@ -29,10 +30,12 @@
       <w>reti</w>
       <w>rets</w>
       <w>sbci</w>
+      <w>serde</w>
       <w>setf</w>
       <w>snapp</w>
       <w>subi</w>
       <w>tokenizes</w>
+      <w>tokfile</w>
       <w>tokline</w>
       <w>tstf</w>
       <w>vcnt</w>

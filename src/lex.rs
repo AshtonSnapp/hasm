@@ -1,12 +1,14 @@
 extern crate regex;
+extern crate serde;
 use regex::*;
 use std::path::Path;
 use std::fs::File;
 use std::io::{BufReader, BufRead};
+use serde::{Serialize, Deserialize};
 
 /// Used to indicate what type an Immediate or Address is.
 /// Immediates can be of any type, while Addresses cannot be ASCII.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum ValueType {
     Binary,
     Decimal,
@@ -17,7 +19,7 @@ pub enum ValueType {
 /// An immediate can be a byte or word (non-ASCII) or a character or string (ASCII).
 /// The ImmediateInfo new() function checks ValueType and ImmediateSize combinations to make sure
 /// it isn't invalid.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum ImmediateSize {
     Byte,
     Word,
@@ -26,7 +28,7 @@ pub enum ImmediateSize {
 }
 
 /// A structure that contains information about an Immediate value.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ImmediateInfo {
     vtype: ValueType,
     size: ImmediateSize
@@ -75,7 +77,7 @@ impl ImmediateInfo {
 }
 
 /// Indicates the pointer (Stack Pointer or Instruction Pointer) that a Relative address is relative to.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Pointer {
     Stack,
     Instruction
@@ -87,7 +89,7 @@ pub enum Pointer {
 /// Relative - two bytes, a signed displacement from one of two pointers indicated by enum Pointer.
 /// Absolute Port - two bytes, a word indicating one of 65,536 I/O registers.
 /// Absolute Memory - three bytes, can access the full 16 mebibytes of memory.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum AddressMode {
     ZeroPage,
     ZeroBank,
@@ -97,7 +99,7 @@ pub enum AddressMode {
 }
 
 /// A structure that contains information about an Address.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AddressInfo {
     vtype: ValueType,
     mode: AddressMode
@@ -120,20 +122,20 @@ impl AddressInfo {
 /// An identifier can be a label or a symbol.
 /// Label - identifies an address within a source file.
 /// Symbol - identifies an address outside a source file, or a frequently used immediate.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum IdentifierType {
     Label,
     Symbol
 }
 
 /// Right now, registers are just integer because we only have an integer ALU. But, futureproofing!
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum RegisterType {
     Integer
 }
 
 /// An enumeration containing information about a token.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum TokenInfo {
     Immediate(ImmediateInfo),
     Address(AddressInfo),
@@ -145,6 +147,7 @@ pub enum TokenInfo {
 }
 
 /// A token! Has content and information about that content (so data and metadata)
+#[derive(Serialize, Deserialize)]
 pub struct Token {
     content: String,
     info: TokenInfo

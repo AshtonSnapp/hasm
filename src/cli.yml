@@ -28,4 +28,4 @@ subcommands:
         - tokens-only:
             short: t
             multiple: false
-            help: Output file should be a JSON'd token file instead of a binary file.
+            help: Output file should be a token file instead of a binary file.
