@@ -87,6 +87,12 @@ fn directive_large(lex: &mut Lexer<Token>) -> Result<DirectiveType, ()> {
 
 fn string(lex: &mut Lexer<Token>) -> Result<[u8], ()> {
     let slice: &str = lex.slice();
+
+    todo!("string callback unimplemented at the moment, sorry!");
+    /* How do I do this?
+     * I'll need to go backwards from the end of slice until I've seen two "s
+     * That's the best way I can think of to go about this, but how would I do that?
+     */
 }
 
 fn char(lex: &mut Lexer<Token>) -> Result<u8, ()> {
