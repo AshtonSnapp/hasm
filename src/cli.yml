@@ -1,0 +1,17 @@
+name: chasm
+version: "0.1.0"
+author: Ashton S. <ashton@ashtons.xyz>
+about: Official Cellia cross-assembler
+args:
+  - verbose:
+      short: v
+      long: verbose
+      help: Enables verbose mode
+  - INPUT:
+      help: The input file. Expects an assembly source file (usually .chasm).
+      required: true
+  - output:
+      short: o
+      long: output
+      help: The name of the output file. Defaults to the input file's name with a different extension.
+      takes_value: true
