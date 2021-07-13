@@ -1,5 +1,71 @@
 use logos::{Logos, Lexer};
-use regex::*;
+
+#[derive(Debug)]
+pub enum IdentifierType {
+    Label,
+    Symbol,
+}
+
+#[derive(Debug)]
+pub struct IdentifierInfo {
+    itype: IdentifierType,
+    val: String
+}
+
+#[derive(Debug)]
+pub enum InstructionType {
+    NoOperation,
+    MoveData,
+    HaltAndCatchFire,
+    MoveDataXIndexed,
+    MoveDataYIndexed,
+    SetDirectPage,
+    SetStackBank,
+    GetStackBank,
+    PushRegister,
+    PushIntegerFlags,
+    PullRegister,
+    PullIntegerFlags,
+    AddIntegers,
+    AddIntegersCarry,
+    SubtractIntegers,
+    SubtractIntegersCarry,
+    BitwiseNot,
+    BitwiseAnd,
+    BitwiseOr,
+    BitwiseExclusiveOr,
+    BitwiseShiftLeft,
+    BitwiseShiftRight,
+    BitwiseRotateLeft,
+    BitwiseRotateRight,
+    BitwiseSetRegisterBit,
+    BitwiseSetIntegerFlag,
+    BitwiseClearRegisterBit,
+    BitwiseClearIntegerFlag,
+    BitwisePopulationCount,
+    BitwiseVacancyCount,
+    Jump,
+    JumpXIndexed,
+    JumpYIndexed,
+    CallSubroutine,
+    CompareIntegers,
+    TestRegisterBit,
+    TestIntegerFlag,
+    BranchEqual,
+    BranchNotEqual,
+    BranchLessThanUnsigned,
+    BranchLessThanSigned,
+    BranchGreaterThanUnsigned,
+    BranchGreaterThanSigned,
+    ReturnFromSubroutine,
+    ReturnFromInterrupt,
+    Break,
+    WaitForInterrupt,
+    BranchLessEqualUnsigned,
+    BranchLessEqualSigned,
+    BranchGreaterEqualUnsigned,
+    BranchGreaterEqualSigned
+}
 
 #[derive(Debug)]
 pub enum DirectiveType {
@@ -45,10 +111,133 @@ pub struct AddressInfo {
     val: u32
 }
 
+fn label(lex: &mut Lexer<Token>) -> Result<IdentifierInfo, ()> {
+    let slice: &str = lex.slice();
+
+    todo!("label callback unimplemented at the moment, sorry!");
+    /* How do I do this?
+     * I'll need to go backwards from the end of slice until I've seen a : and a space
+     * That's the best way I can think of to go about this, but how would I do that?
+     */
+}
+
+fn symbol(lex: &mut Lexer<Token>) -> Result<IdentifierInfo, ()> {
+    let slice: &str = lex.slice();
+
+    todo!("symbol callback unimplemented at the moment, sorry!");
+    /* How do I do this?
+     * I'll need to go backwards from the end of slice until I've seen a space
+     * That's the best way I can think of to go about this, but how would I do that?
+     */
+}
+
+fn instruction_small(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
+    let slice: &str = lex.slice();
+
+    let poss_inst: &str = &slice[slice.len() - 3..slice.len() - 1].to_lowercase().as_str();
+
+    // baby function lol
+
+    match poss_inst {
+        "or" => Ok(InstructionType::BitwiseOr),
+        _ => Err(())
+    }
+}
+
+fn instruction(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
+    let slice: &str = lex.slice();
+
+    let poss_inst: &str = &slice[slice.len() - 4..slice.len() - 1].to_lowercase().as_str();
+
+    match poss_inst {
+        "mov" => Ok(InstructionType::MoveData),
+        "not" => Ok(InstructionType::BitwiseNot),
+        "and" => Ok(InstructionType::BitwiseAnd),
+        "xor" => Ok(InstructionType::BitwiseExclusiveOr),
+        "shl" => Ok(InstructionType::BitwiseShiftLeft),
+        "shr" => Ok(InstructionType::BitwiseShiftRight),
+        "rol" => Ok(InstructionType::BitwiseRotateLeft),
+        "ror" => Ok(InstructionType::BitwiseRotateRight),
+        "set" => Ok(InstructionType::BitwiseSetRegisterBit),
+        "clr" => Ok(InstructionType::BitwiseClearRegisterBit),
+        "brk" => Ok(InstructionType::Break),
+        _ => Err(())
+    }
+}
+
+fn instruction_large(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
+    let slice: &str = lex.slice();
+
+    let poss_inst: &str = &slice[slice.len() - 5..slice.len() - 1].to_lowercase().as_str();
+
+    match poss_inst {
+        "noop" => Ok(InstructionType::NoOperation),
+        "hacf" => Ok(InstructionType::HaltAndCatchFire),
+        "movx" => Ok(InstructionType::MoveDataXIndexed),
+        "movy" => Ok(InstructionType::MoveDataYIndexed),
+        "push" => Ok(InstructionType::PushRegister),
+        "pull" => Ok(InstructionType::PullRegister),
+        "addi" => Ok(InstructionType::AddIntegers),
+        "adci" => Ok(InstructionType::AddIntegersCarry),
+        "subi" => Ok(InstructionType::SubtractIntegers),
+        "sbci" => Ok(InstructionType::SubtractIntegersCarry),
+        "pcnt" => Ok(InstructionType::BitwisePopulationCount),
+        "vcnt" => Ok(InstructionType::BitwiseVacancyCount),
+        "jump" => Ok(InstructionType::Jump),
+        "call" => Ok(InstructionType::CallSubroutine),
+        "cmpi" => Ok(InstructionType::CompareIntegers),
+        "test" => Ok(InstructionType::TestRegisterBit),
+        "bequ" => Ok(InstructionType::BranchEqual),
+        "bneq" => Ok(InstructionType::BranchNotEqual),
+        "bltu" => Ok(InstructionType::BranchLessThanUnsigned),
+        "blts" => Ok(InstructionType::BranchLessThanSigned),
+        "bgtu" => Ok(InstructionType::BranchGreaterThanUnsigned),
+        "bgts" => Ok(InstructionType::BranchGreaterThanSigned),
+        "rets" => Ok(InstructionType::ReturnFromSubroutine),
+        "reti" => Ok(InstructionType::ReturnFromInterrupt),
+        "wait" => Ok(InstructionType::WaitForInterrupt),
+        "bleu" => Ok(InstructionType::BranchLessEqualUnsigned),
+        "bles" => Ok(InstructionType::BranchLessEqualSigned),
+        "bgeu" => Ok(InstructionType::BranchGreaterEqualUnsigned),
+        "bges" => Ok(InstructionType::BranchGreaterEqualSigned),
+        _ => Err(())
+    }
+}
+
+fn instruction_xlarge(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
+    let slice: &str = lex.slice();
+
+    let poss_inst: &str = &slice[slice.len() - 6..slice.len() - 1].to_lowercase().as_str();
+
+    match poss_inst {
+        "setdp" => Ok(InstructionType::SetDirectPage),
+        "setsb" => Ok(InstructionType::SetStackBank),
+        "getsb" => Ok(InstructionType::GetStackBank),
+        "setif" => Ok(InstructionType::BitwiseSetIntegerFlag),
+        "clrif" => Ok(InstructionType::BitwiseClearIntegerFlag),
+        "jumpx" => Ok(InstructionType::JumpXIndexed),
+        "jumpy" => Ok(InstructionType::JumpYIndexed),
+        _ => Err(())
+    }
+}
+
+fn instruction_xxlarge(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
+    let slice: &str = lex.slice();
+
+    let poss_inst: &str = &slice[slice.len() - 7..slice.len() - 1].to_lowercase().as_str();
+
+    match poss_inst {
+        "pushif" => Ok(InstructionType::PushIntegerFlags),
+        "pullif" => Ok(InstructionType::PullIntegerFlags),
+        "testif" => Ok(InstructionType::TestIntegerFlag),
+        _ => Err(())
+    }
+}
+
 fn directive(lex: &mut Lexer<Token>) -> Result<DirectiveType, ()> {
     let slice: &str = lex.slice();
 
-    let poss_dir: &str = &slice[slice.len() - 5..slice.len() - 1];
+    let poss_dir: &str = &slice[slice.len() - 5..slice.len() - 1].to_lowercase().as_str;
 
     if poss_dir == ".org" {
         Ok(DirectiveType::SetOrigin)
@@ -70,7 +259,7 @@ fn directive(lex: &mut Lexer<Token>) -> Result<DirectiveType, ()> {
 fn directive_large(lex: &mut Lexer<Token>) -> Result<DirectiveType, ()> {
     let slice: &str = lex.slice();
 
-    let poss_dir: &str = &slice[slice.len() - 6..slice.len() - 1];
+    let poss_dir: &str = &slice[slice.len() - 6..slice.len() - 1].to_lowercase().as_str;
 
     if poss_dir == ".byte" {
         Ok(DirectiveType::PlaceByte)
@@ -530,7 +719,7 @@ pub enum Token {
 
     #[regex(r"'[\x00-\x7F]'", char)]
     #[regex(r"'\[0-9a-zA-Z]'", char_esc)]
-    #[regex(r"'\x[0-9a-fA-F][0-9a-fA-F]'", char_esc_hex)]
+    #[regex(r"'\\x[0-9a-fA-F][0-9a-fA-F]'", char_esc_hex)]
     Char(u8),
 
     #[regex(r#""[\x00-\xFF]+""#, string)]
@@ -546,7 +735,14 @@ pub enum Token {
     #[regex(r".[a-zA-Z][a-zA-Z][a-zA-Z][a-zA-Z]", directive_large)]
     Directive(DirectiveType),
 
+    #[regex(r"[a-zA-Z][a-zA-Z]", instruction_small)]
+    #[regex(r"[a-zA-Z][a-zA-Z][a-zA-Z]", instruction)]
+    #[regex(r"[a-zA-Z][a-zA-Z][a-zA-Z][a-zA-Z]", instruction_large)]
+    #[regex(r"[a-zA-Z][a-zA-Z][a-zA-Z][a-zA-Z][a-zA-Z]", instruction_xlarge)]
+    #[regex(r"[a-zA-Z][a-zA-Z][a-zA-Z][a-zA-Z][a-zA-Z][a-zA-Z]", instruction_xxlarge)]
     Instruction(InstructionType),
 
+    #[regex(r"[a-zA-Z_-]+:", label)]
+    #[regex(r"[a-zA-Z_-]+", symbol)]
     Identifier(IdentifierInfo)
 }
