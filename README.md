@@ -1,4 +1,7 @@
 # chasm
+
+![rust](https://github.com/AshtonSnapp/chasm/actions/workflows/rust.yml/badge.svg)
+
 The Official Cellia Cross-Assembler for Modern Computers
 
 ## Building chasm
