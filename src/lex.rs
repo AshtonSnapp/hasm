@@ -1,4 +1,7 @@
 use logos::{Logos, Lexer};
+use std::fs::File;
+use std::io::{self, BufRead, BufReader, Lines};
+use std::iter::Enumerate;
 
 #[derive(Debug)]
 pub enum IdentifierType {
@@ -739,18 +742,21 @@ pub enum Token {
     #[regex(r"[0-2][0-9][0-9]")]
     #[regex(r"IP(\+|-)[0-6][0-9][0-9][0-9][0-9]")]
     #[regex(r"SP(\+|-)[0-6][0-9][0-9][0-9][0-9]")]
+    #[regex(r"\([0-1][0-9][0-9][0-9][0-9][0-9][0-9][0-9]\)")]
     #[regex(r"\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]")]
     #[regex(r"\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]p")]
     #[regex(r"\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]")]
     #[regex(r"\$[0-9a-fA-F][0-9a-fA-F]")]
     #[regex(r"IP(\+|-)\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]")]
     #[regex(r"SP(\+|-)\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]")]
+    #[regex(r"\(\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]\)")]
     #[regex(r"%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]")]
     #[regex(r"%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]p")]
     #[regex(r"%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]")]
     #[regex(r"%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]")]
     #[regex(r"IP(\+|-)%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]")]
     #[regex(r"SP(\+|-)%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]")]
+    #[regex(r"\(%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]\)")]
     Address(AddressInfo),
 
     #[regex(r".[a-zA-Z][a-zA-Z][a-zA-Z]", priority=7, callback=directive)]
@@ -767,4 +773,50 @@ pub enum Token {
     #[regex(r"[a-zA-Z_-]+:", label)]
     #[regex(r"[a-zA-Z_-]+", symbol)]
     Identifier(IdentifierInfo)
+}
+
+pub fn tok(&mut f: File, v: bool) -> Result<Vec<Vec<Token>>, Vec<str>> {
+    let mut errs: Vec<&str> = Vec::new();
+    let mut toks: Vec<Vec<Token>> = Vec::new();
+
+    let lines: Enumerate<Lines<BufReader<&str>>> = io::BufReader::new(f).lines().enumerate();
+
+    if v {
+        println!("[INFO] Starting to tokenize source file...");
+    }
+
+    for line in lines {
+        if let Ok(l) = line.1 {
+
+            if v {
+                println!("[INFO] Tokenizing line {}...", line.0);
+            }
+
+            let mut tok_line_toks: Vec<Token> = Vec::new();
+
+            let tok_line = Token::lexer(l.as_str()).spanned();
+            for tok in tok_line {
+                if let Token::Error = tok {
+                    // TODO: Useful error message code. Want errors to be as useful or nearly as useful as rustc errors
+                    if v {
+                        eprintln!("[ERR] Error on line {}", line.0);
+                        if errs.is_empty() {
+                            errs.push(format!("[ERR] Error on line {}", line.0).as_str);
+                        }
+                    } else {
+                        errs.push(format!("[ERR] Error on line {}", line.0).as_str);
+                    }
+                } else {
+                    tok_line_toks.push(tok);
+                }
+            }
+            toks.push(tok_line_toks);
+        }
+    }
+
+    if errs.is_empty() {
+        Ok(toks)
+    } else {
+        Err(errs)
+    }
 }
