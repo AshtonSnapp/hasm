@@ -2,11 +2,24 @@ use logos::{Logos, Lexer};
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Lines};
 use std::iter::Enumerate;
+use std::boxed::Box;
+
+#[derive(Debug)]
+pub enum RegisterIdent {
+    IntegerAccumulator,         // iA
+    IntegerAccumulatorHigh,     // iAH
+    IntegerAccumulatorLow,      // iAL
+    IntegerBAccumulator,        // iB
+    IntegerBAccumulatorHigh,    // iBH
+    IntegerBAccumulatorLow,     // iBL
+    IntegerXIndex,              // iX
+    IntegerYIndex               // iY
+}
 
 #[derive(Debug)]
 pub enum IdentifierType {
-    Label,
-    Symbol,
+    Label,  // Used to "label" a spot in the source file that instructions can refer to
+    Symbol, // Used to make easy-to-read "symbols" that correspond to some sort of address outside of the program or commonly-used immediate
 }
 
 #[derive(Debug)]
@@ -114,6 +127,34 @@ pub struct AddressInfo {
     val: u32
 }
 
+fn register(lex: &mut Lexer<Token>) -> Result<RegisterIdent, ()> {
+    let slice: &str = lex.slice();
+
+    let reg: &str = &slice[slice.len() - 1..slice.len() - 1];
+
+    match reg {
+        "A" => Ok(RegisterIdent::IntegerAccumulator),
+        "B" => Ok(RegisterIdent::IntegerBAccumulator),
+        "X" => Ok(RegisterIdent::IntegerXIndex),
+        "Y" => Ok(RegisterIdent::IntegerYIndex),
+        _ => Err(())
+    }
+}
+
+fn small_register(lex: &mut Lexer<Token>) -> Result<RegisterIdent, ()> {
+    let slice: &str = lex.slice();
+
+    let reg: &str = &slice[slice.len() - 2..slice.len() - 1];
+
+    match reg {
+        "AH" => Ok(RegisterIdent::IntegerAccumulatorHigh),
+        "AL" => Ok(RegisterIdent::IntegerAccumulatorLow),
+        "BH" => Ok(RegisterIdent::IntegerBAccumulatorHigh),
+        "BL" => Ok(RegisterIdent::IntegerBAccumulatorLow),
+        _ => Err(())
+    }
+}
+
 fn label(lex: &mut Lexer<Token>) -> Result<IdentifierInfo, ()> {
     let slice: &str = lex.slice();
 
@@ -137,7 +178,7 @@ fn symbol(lex: &mut Lexer<Token>) -> Result<IdentifierInfo, ()> {
 fn instruction_small(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
     let slice: &str = lex.slice();
 
-    let poss_inst: &str = &slice[slice.len() - 3..slice.len() - 1].to_lowercase().as_str();
+    let poss_inst: &str = &slice[slice.len() - 3..slice.len() - 1].to_lowercase();
 
     // baby function lol
 
@@ -150,7 +191,7 @@ fn instruction_small(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
 fn instruction(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
     let slice: &str = lex.slice();
 
-    let poss_inst: &str = &slice[slice.len() - 4..slice.len() - 1].to_lowercase().as_str();
+    let poss_inst: &str = &slice[slice.len() - 4..slice.len() - 1].to_lowercase();
 
     match poss_inst {
         "mov" => Ok(InstructionType::MoveData),
@@ -171,7 +212,7 @@ fn instruction(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
 fn instruction_large(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
     let slice: &str = lex.slice();
 
-    let poss_inst: &str = &slice[slice.len() - 5..slice.len() - 1].to_lowercase().as_str();
+    let poss_inst: &str = &slice[slice.len() - 5..slice.len() - 1].to_lowercase();
 
     match poss_inst {
         "noop" => Ok(InstructionType::NoOperation),
@@ -210,7 +251,7 @@ fn instruction_large(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
 fn instruction_xlarge(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
     let slice: &str = lex.slice();
 
-    let poss_inst: &str = &slice[slice.len() - 6..slice.len() - 1].to_lowercase().as_str();
+    let poss_inst: &str = &slice[slice.len() - 6..slice.len() - 1].to_lowercase();
 
     match poss_inst {
         "setdp" => Ok(InstructionType::SetDirectPage),
@@ -227,7 +268,7 @@ fn instruction_xlarge(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
 fn instruction_xxlarge(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
     let slice: &str = lex.slice();
 
-    let poss_inst: &str = &slice[slice.len() - 7..slice.len() - 1].to_lowercase().as_str();
+    let poss_inst: &str = &slice[slice.len() - 7..slice.len() - 1].to_lowercase();
 
     match poss_inst {
         "pushif" => Ok(InstructionType::PushIntegerFlags),
@@ -240,7 +281,7 @@ fn instruction_xxlarge(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
 fn directive(lex: &mut Lexer<Token>) -> Result<DirectiveType, ()> {
     let slice: &str = lex.slice();
 
-    let poss_dir: &str = &slice[slice.len() - 5..slice.len() - 1].to_lowercase().as_str;
+    let poss_dir: &str = &slice[slice.len() - 5..slice.len() - 1].to_lowercase();
 
     if poss_dir == ".org" {
         Ok(DirectiveType::SetOrigin)
@@ -262,7 +303,7 @@ fn directive(lex: &mut Lexer<Token>) -> Result<DirectiveType, ()> {
 fn directive_large(lex: &mut Lexer<Token>) -> Result<DirectiveType, ()> {
     let slice: &str = lex.slice();
 
-    let poss_dir: &str = &slice[slice.len() - 6..slice.len() - 1].to_lowercase().as_str;
+    let poss_dir: &str = &slice[slice.len() - 6..slice.len() - 1].to_lowercase();
 
     if poss_dir == ".byte" {
         Ok(DirectiveType::PlaceByte)
@@ -277,7 +318,7 @@ fn directive_large(lex: &mut Lexer<Token>) -> Result<DirectiveType, ()> {
 
 // TODO: address and immediate functions go here
 
-fn string(lex: &mut Lexer<Token>) -> Result<[u8], ()> {
+fn string(lex: &mut Lexer<Token>) -> Result<Box<[u8]>, ()> {
     let slice: &str = lex.slice();
 
     todo!("string callback unimplemented at the moment, sorry!");
@@ -290,7 +331,7 @@ fn string(lex: &mut Lexer<Token>) -> Result<[u8], ()> {
 fn char(lex: &mut Lexer<Token>) -> Result<u8, ()> {
     let slice: &str = lex.slice();
 
-    let poss_char: &str = &slice[slice.len() - 2];
+    let poss_char: &str = &slice[slice.len() - 2..slice.len() - 2];
 
     // Welcome to hell.
 
@@ -726,7 +767,7 @@ pub enum Token {
     Char(u8),
 
     #[regex(r#""[\x00-\xFF]+""#, string)]
-    String([u8]),
+    String(Box<[u8]>),
 
     #[regex(r"#[0-6][0-9][0-9][0-9][0-9]")]
     #[regex(r"#[0-2][0-9][0-9]")]
@@ -772,14 +813,18 @@ pub enum Token {
 
     #[regex(r"[a-zA-Z_-]+:", label)]
     #[regex(r"[a-zA-Z_-]+", symbol)]
-    Identifier(IdentifierInfo)
+    Identifier(IdentifierInfo),
+
+    #[regex(r"i[ABXY]", register)]
+    #[regex(r"i[AB][LH]", small_register)]
+    Register(RegisterIdent)
 }
 
-pub fn tok(&mut f: File, v: bool) -> Result<Vec<Vec<Token>>, Vec<str>> {
-    let mut errs: Vec<&str> = Vec::new();
+pub fn tok(f: File, v: bool) -> Result<Vec<Vec<Token>>, Vec<String>> {
+    let mut errs: Vec<String> = Vec::new();
     let mut toks: Vec<Vec<Token>> = Vec::new();
 
-    let lines: Enumerate<Lines<BufReader<&str>>> = io::BufReader::new(f).lines().enumerate();
+    let lines: Enumerate<Lines<BufReader<File>>> = io::BufReader::new(f).lines().enumerate();
 
     if v {
         println!("[INFO] Starting to tokenize source file...");
@@ -795,16 +840,16 @@ pub fn tok(&mut f: File, v: bool) -> Result<Vec<Vec<Token>>, Vec<str>> {
             let mut tok_line_toks: Vec<Token> = Vec::new();
 
             let tok_line = Token::lexer(l.as_str()).spanned();
-            for tok in tok_line {
+            for (tok, _span) in tok_line {
                 if let Token::Error = tok {
                     // TODO: Useful error message code. Want errors to be as useful or nearly as useful as rustc errors
                     if v {
                         eprintln!("[ERR] Error on line {}", line.0);
                         if errs.is_empty() {
-                            errs.push(format!("[ERR] Error on line {}", line.0).as_str);
+                            errs.push(format!("[ERR] Error on line {}", line.0));
                         }
                     } else {
-                        errs.push(format!("[ERR] Error on line {}", line.0).as_str);
+                        errs.push(format!("[ERR] Error on line {}", line.0));
                     }
                 } else {
                     tok_line_toks.push(tok);

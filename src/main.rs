@@ -29,7 +29,7 @@ fn main() {
 
     let file = File::open(infile_name);
     match file {
-        Ok(&mut f) => {
+        Ok(f) => {
             let poss_tokens = lex::tok(f, verbose);
             match poss_tokens {
                 Ok(t) => {},
