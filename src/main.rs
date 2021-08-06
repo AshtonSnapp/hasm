@@ -27,8 +27,13 @@ fn main() {
     // If it wasn't present, the program would have exited already.
     let infile_name = Path::new(matches.value_of("INPUT").unwrap());
 
+    // Let's open the file.
     let file = File::open(infile_name);
+
+    // Let's check if the file actually opened.
     match file {
+
+        // The file did indeed open!
         Ok(f) => {
             let poss_tokens = lex::tok(f, verbose);
             match poss_tokens {
@@ -37,16 +42,21 @@ fn main() {
                     if verbose {
                         exit(1);
                     } else {
-                        for err in e {
+                        for err in &e {
                             eprintln!("{}", err);
                         }
+
+                        eprintln!("[INFO] {} errors encountered.", e.len());
+
                         exit(1);
                     }
                 }
             }
         },
+
+        // The file didn't actually open, crap!
         Err(e) => {
-            eprintln!("[ERR] Cannot open input file. Please check to make sure that the file exists!");
+            eprintln!("[ERR!] Cannot open input file. Please check to make sure that the file actually exists.");
             exit(1);
         }
     }

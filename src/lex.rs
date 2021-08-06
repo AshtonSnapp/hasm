@@ -1,8 +1,10 @@
 use logos::{Logos, Lexer};
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Lines};
-use std::iter::Enumerate;
-use std::boxed::Box;
+use std::iter::{Enumerate, Rev};
+use std::num::ParseIntError;
+use std::str::CharIndices;
+use substring::Substring;
 
 #[derive(Debug)]
 pub enum RegisterIdent {
@@ -117,20 +119,20 @@ pub enum NumBase {
 #[derive(Debug)]
 pub struct ImmediateInfo {
     base: NumBase,
-    val: u32
+    val: u16
 }
 
 #[derive(Debug)]
 pub struct AddressInfo {
     addr_type: AddressType,
     base: NumBase,
-    val: u32
+    val: i32
 }
 
 fn register(lex: &mut Lexer<Token>) -> Result<RegisterIdent, ()> {
     let slice: &str = lex.slice();
 
-    let reg: &str = &slice[slice.len() - 1..slice.len() - 1];
+    let reg: &str = &slice.substring(slice.len() - 1, slice.len());
 
     match reg {
         "A" => Ok(RegisterIdent::IntegerAccumulator),
@@ -144,7 +146,7 @@ fn register(lex: &mut Lexer<Token>) -> Result<RegisterIdent, ()> {
 fn small_register(lex: &mut Lexer<Token>) -> Result<RegisterIdent, ()> {
     let slice: &str = lex.slice();
 
-    let reg: &str = &slice[slice.len() - 2..slice.len() - 1];
+    let reg: &str = &slice.substring(slice.len() - 2, slice.len() - 1);
 
     match reg {
         "AH" => Ok(RegisterIdent::IntegerAccumulatorHigh),
@@ -178,7 +180,7 @@ fn symbol(lex: &mut Lexer<Token>) -> Result<IdentifierInfo, ()> {
 fn instruction_small(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
     let slice: &str = lex.slice();
 
-    let poss_inst: &str = &slice[slice.len() - 3..slice.len() - 1].to_lowercase();
+    let poss_inst: &str = &slice.substring(slice.len() - 2, slice.len()).to_lowercase();
 
     // baby function lol
 
@@ -191,7 +193,7 @@ fn instruction_small(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
 fn instruction(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
     let slice: &str = lex.slice();
 
-    let poss_inst: &str = &slice[slice.len() - 4..slice.len() - 1].to_lowercase();
+    let poss_inst: &str = &slice.substring(slice.len() - 3, slice.len()).to_lowercase();
 
     match poss_inst {
         "mov" => Ok(InstructionType::MoveData),
@@ -212,7 +214,7 @@ fn instruction(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
 fn instruction_large(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
     let slice: &str = lex.slice();
 
-    let poss_inst: &str = &slice[slice.len() - 5..slice.len() - 1].to_lowercase();
+    let poss_inst: &str = &slice.substring(slice.len() - 4, slice.len()).to_lowercase();
 
     match poss_inst {
         "noop" => Ok(InstructionType::NoOperation),
@@ -251,7 +253,7 @@ fn instruction_large(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
 fn instruction_xlarge(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
     let slice: &str = lex.slice();
 
-    let poss_inst: &str = &slice[slice.len() - 6..slice.len() - 1].to_lowercase();
+    let poss_inst: &str = &slice.substring(slice.len() - 5, slice.len()).to_lowercase();
 
     match poss_inst {
         "setdp" => Ok(InstructionType::SetDirectPage),
@@ -268,7 +270,7 @@ fn instruction_xlarge(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
 fn instruction_xxlarge(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
     let slice: &str = lex.slice();
 
-    let poss_inst: &str = &slice[slice.len() - 7..slice.len() - 1].to_lowercase();
+    let poss_inst: &str = &slice.substring(slice.len() - 6, slice.len()).to_lowercase();
 
     match poss_inst {
         "pushif" => Ok(InstructionType::PushIntegerFlags),
@@ -281,7 +283,7 @@ fn instruction_xxlarge(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
 fn directive(lex: &mut Lexer<Token>) -> Result<DirectiveType, ()> {
     let slice: &str = lex.slice();
 
-    let poss_dir: &str = &slice[slice.len() - 5..slice.len() - 1].to_lowercase();
+    let poss_dir: &str = &slice.substring(slice.len() - 4, slice.len()).to_lowercase();
 
     if poss_dir == ".org" {
         Ok(DirectiveType::SetOrigin)
@@ -303,7 +305,7 @@ fn directive(lex: &mut Lexer<Token>) -> Result<DirectiveType, ()> {
 fn directive_large(lex: &mut Lexer<Token>) -> Result<DirectiveType, ()> {
     let slice: &str = lex.slice();
 
-    let poss_dir: &str = &slice[slice.len() - 6..slice.len() - 1].to_lowercase();
+    let poss_dir: &str = &slice.substring(slice.len() - 5, slice.len()).to_lowercase();
 
     if poss_dir == ".byte" {
         Ok(DirectiveType::PlaceByte)
@@ -316,22 +318,147 @@ fn directive_large(lex: &mut Lexer<Token>) -> Result<DirectiveType, ()> {
     }
 }
 
-// TODO: address and immediate functions go here
+fn addr_abs_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
 
-fn string(lex: &mut Lexer<Token>) -> Result<Box<[u8]>, ()> {
+fn addr_port_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+
+fn addr_zero_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+
+fn addr_dp_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+
+fn addr_ipr_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+
+fn addr_spr_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+
+fn addr_ind_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+
+fn addr_abs_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+
+fn addr_port_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+
+fn addr_zero_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+
+fn addr_dp_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+
+fn addr_ipr_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+
+fn addr_spr_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+
+fn addr_ind_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+
+fn addr_abs_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+
+fn addr_port_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+
+fn addr_zero_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+
+fn addr_dp_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+
+fn addr_ipr_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+
+fn addr_spr_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+
+fn addr_ind_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+
+fn imm_dec(lex: &mut Lexer<Token>) -> Result<ImmediateInfo, ()> {
+    let slice: &str = lex.slice();
+
+    let poss_imm: Result<u16, ParseIntError> = u16::from_str_radix(&slice.substring(slice.len() - 5, slice.len()), 10);
+
+    match poss_imm {
+        Ok(t) => Ok(ImmediateInfo { base: NumBase::Decimal, val: t}),
+        Err(e) => Err(())
+    }
+}
+
+fn small_imm_dec(lex: &mut Lexer<Token>) -> Result<ImmediateInfo, ()> {
+    let slice: &str = lex.slice();
+
+    let poss_imm: Result<u16, ParseIntError> = u16::from_str_radix(&slice.substring(slice.len() - 3, slice.len()), 10);
+
+    match poss_imm {
+        Ok(t) => {
+            if t > 255 {
+                Err(())
+            } else {
+                Ok(ImmediateInfo { base: NumBase::Decimal, val: t })
+            }
+        },
+        Err(e) => Err(())
+    }
+}
+
+fn imm_hex(lex: &mut Lexer<Token>) -> Result<ImmediateInfo, ()> {
+    let slice: &str = lex.slice();
+
+    let poss_imm: Result<u16, ParseIntError> = u16::from_str_radix(&slice.substring(slice.len() - 4, slice.len()), 16);
+
+    match poss_imm {
+        Ok(t) => Ok(ImmediateInfo { base: NumBase::Hexadecimal, val: t}),
+        Err(e) => Err(())
+    }
+}
+
+fn small_imm_hex(lex: &mut Lexer<Token>) -> Result<ImmediateInfo, ()> {
+    let slice: &str = lex.slice();
+
+    let poss_imm: Result<u16, ParseIntError> = u16::from_str_radix(&slice.substring(slice.len() - 2, slice.len()), 16);
+
+    match poss_imm {
+        Ok(t) => {
+            if t > 255 {
+                Err(())
+            } else {
+                Ok(ImmediateInfo { base: NumBase::Hexadecimal, val: t })
+            }
+        },
+        Err(e) => Err(())
+    }
+}
+
+fn imm_bin(lex: &mut Lexer<Token>) -> Result<ImmediateInfo, ()> {
+    let slice: &str = lex.slice();
+
+    let poss_imm: Result<u16, ParseIntError> = u16::from_str_radix(&slice.substring(slice.len() - 16, slice.len()), 2);
+
+    match poss_imm {
+        Ok(t) => Ok(ImmediateInfo { base: NumBase::Binary, val: t}),
+        Err(e) => Err(())
+    }
+}
+
+fn small_imm_bin(lex: &mut Lexer<Token>) -> Result<ImmediateInfo, ()> {
+    let slice: &str = lex.slice();
+
+    let poss_imm: Result<u16, ParseIntError> = u16::from_str_radix(&slice.substring(slice.len() - 8, slice.len()), 2);
+
+    match poss_imm {
+        Ok(t) => {
+            if t > 255 {
+                Err(())
+            } else {
+                Ok(ImmediateInfo { base: NumBase::Binary, val: t })
+            }
+        },
+        Err(e) => Err(())
+    }
+}
+
+fn string(lex: &mut Lexer<Token>) -> Result<Vec<u8>, ()> {
     let slice: &str = lex.slice();
 
     todo!("string callback unimplemented at the moment, sorry!");
     /* How do I do this?
-     * I'll need to go backwards from the end of slice until I've seen two "s
+     * I'll need to go backwards from the end of the slice until I've seen two "s
      * That's the best way I can think of to go about this, but how would I do that?
+     * Also, I need to check if the " has a backslash before it.
      */
 }
 
 fn char(lex: &mut Lexer<Token>) -> Result<u8, ()> {
     let slice: &str = lex.slice();
 
-    let poss_char: &str = &slice[slice.len() - 2..slice.len() - 2];
+    let poss_char: &str = &slice.substring(slice.len() - 1, slice.len() - 1);
 
     // Welcome to hell.
 
@@ -471,7 +598,7 @@ fn char(lex: &mut Lexer<Token>) -> Result<u8, ()> {
 fn char_esc(lex: &mut Lexer<Token>) -> Result<u8, ()> {
     let slice: &str = lex.slice();
 
-    let poss_char: &str = &slice[slice.len() - 3..slice.len() - 2];
+    let poss_char: &str = &slice.substring(slice.len() - 2, slice.len() - 1);
 
     match poss_char {
         "\\\\" => Ok(92),
@@ -489,7 +616,7 @@ fn char_esc(lex: &mut Lexer<Token>) -> Result<u8, ()> {
 fn char_esc_hex(lex: &mut Lexer<Token>) -> Result<u8, ()> {
     let slice: &str = lex.slice();
 
-    let poss_char: &str = &slice[slice.len() - 5..slice.len() - 2];
+    let poss_char: &str = &slice.substring(slice.len() - 4, slice.len() - 1);
 
     // Welcome to hell 2: electric boogaloo
 
@@ -767,38 +894,42 @@ pub enum Token {
     Char(u8),
 
     #[regex(r#""[\x00-\xFF]+""#, string)]
-    String(Box<[u8]>),
+    String(Vec<u8>),
 
-    #[regex(r"#[0-6][0-9][0-9][0-9][0-9]")]
-    #[regex(r"#[0-2][0-9][0-9]")]
-    #[regex(r"#\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]")]
-    #[regex(r"#\$[0-9a-fA-F][0-9a-fA-F]")]
-    #[regex(r"#%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]")]
-    #[regex(r"#%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]")]
+    #[regex(r"#[0-6][0-9][0-9][0-9][0-9]", imm_dec)]
+    #[regex(r"#[0-2][0-9][0-9]", small_imm_dec)]
+    #[regex(r"#\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]", imm_hex)]
+    #[regex(r"#\$[0-9a-fA-F][0-9a-fA-F]", small_imm_hex)]
+    #[regex(r"#%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]", imm_bin)]
+    #[regex(r"#%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]", small_imm_bin)]
     Immediate(ImmediateInfo),
 
-    #[regex(r"[0-1][0-9][0-9][0-9][0-9][0-9][0-9][0-9]")]
-    #[regex(r"[0-6][0-9][0-9][0-9][0-9]p")]
-    #[regex(r"[0-6][0-9][0-9][0-9][0-9]")]
-    #[regex(r"[0-2][0-9][0-9]")]
-    #[regex(r"IP(\+|-)[0-6][0-9][0-9][0-9][0-9]")]
-    #[regex(r"SP(\+|-)[0-6][0-9][0-9][0-9][0-9]")]
-    #[regex(r"\([0-1][0-9][0-9][0-9][0-9][0-9][0-9][0-9]\)")]
-    #[regex(r"\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]")]
-    #[regex(r"\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]p")]
-    #[regex(r"\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]")]
-    #[regex(r"\$[0-9a-fA-F][0-9a-fA-F]")]
-    #[regex(r"IP(\+|-)\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]")]
-    #[regex(r"SP(\+|-)\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]")]
-    #[regex(r"\(\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]\)")]
-    #[regex(r"%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]")]
-    #[regex(r"%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]p")]
-    #[regex(r"%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]")]
-    #[regex(r"%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]")]
-    #[regex(r"IP(\+|-)%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]")]
-    #[regex(r"SP(\+|-)%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]")]
-    #[regex(r"\(%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]\)")]
+    // WELCOME TO THE PAIN TRAIN
+
+    #[regex(r"[0-1][0-9][0-9][0-9][0-9][0-9][0-9][0-9]", addr_abs_dec)]
+    #[regex(r"[0-6][0-9][0-9][0-9][0-9]p", addr_port_dec)]
+    #[regex(r"[0-6][0-9][0-9][0-9][0-9]", addr_zero_dec)]
+    #[regex(r"[0-2][0-9][0-9]", addr_dp_dec)]
+    #[regex(r"IP(\+|-)[0-6][0-9][0-9][0-9][0-9]", addr_ipr_dec)]
+    #[regex(r"SP(\+|-)[0-6][0-9][0-9][0-9][0-9]", addr_spr_dec)]
+    #[regex(r"\([0-1][0-9][0-9][0-9][0-9][0-9][0-9][0-9]\)", addr_ind_dec)]
+    #[regex(r"\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]", addr_abs_hex)]
+    #[regex(r"\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]p", addr_port_hex)]
+    #[regex(r"\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]", addr_zero_hex)]
+    #[regex(r"\$[0-9a-fA-F][0-9a-fA-F]", addr_dp_hex)]
+    #[regex(r"IP(\+|-)\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]", addr_ipr_hex)]
+    #[regex(r"SP(\+|-)\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]", addr_spr_hex)]
+    #[regex(r"\(\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]\)", addr_ind_hex)]
+    #[regex(r"%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]", addr_abs_bin)]
+    #[regex(r"%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]p", addr_port_bin)]
+    #[regex(r"%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]", addr_zero_bin)]
+    #[regex(r"%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]", addr_dp_bin)]
+    #[regex(r"IP(\+|-)%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]", addr_ipr_bin)]
+    #[regex(r"SP(\+|-)%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]", addr_spr_bin)]
+    #[regex(r"\(%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]\)", addr_ind_bin)]
     Address(AddressInfo),
+
+    // YOU ARE NOW LEAVING THE PAIN TRAIN
 
     #[regex(r".[a-zA-Z][a-zA-Z][a-zA-Z]", priority=7, callback=directive)]
     #[regex(r".[a-zA-Z][a-zA-Z][a-zA-Z][a-zA-Z]", priority=8, callback=directive_large)]
@@ -840,28 +971,47 @@ pub fn tok(f: File, v: bool) -> Result<Vec<Vec<Token>>, Vec<String>> {
             let mut tok_line_toks: Vec<Token> = Vec::new();
 
             let tok_line = Token::lexer(l.as_str()).spanned();
-            for (tok, _span) in tok_line {
+            for (tok, span) in tok_line {
                 if let Token::Error = tok {
                     // TODO: Useful error message code. Want errors to be as useful or nearly as useful as rustc errors
                     if v {
-                        eprintln!("[ERR] Error on line {}", line.0);
+                        eprintln!("[ERR!] Error on line {}. (byte span: {:?})", line.0, span);
                         if errs.is_empty() {
-                            errs.push(format!("[ERR] Error on line {}", line.0));
+                            errs.push(format!("[ERR!] Error on line {}. (byte span: {:?})", line.0, span));
                         }
                     } else {
-                        errs.push(format!("[ERR] Error on line {}", line.0));
+                        errs.push(format!("[ERR!] Error on line {}. (byte span: {:?})", line.0, span));
                     }
                 } else {
+
+                    if v {
+                        println!("[INFO] Token {:?} (byte span: {:?}) found.", tok, span);
+                    }
+
                     tok_line_toks.push(tok);
                 }
             }
             toks.push(tok_line_toks);
+
+            if v {
+                println!("[INFO] Line {} tokenized.", line.0);
+            }
         }
     }
 
     if errs.is_empty() {
+
+        if v {
+            println!("[INFO] Source file has been tokenized: {} lines.", toks.len());
+        }
+
         Ok(toks)
     } else {
+
+        if v {
+            eprintln!("[INFO] {} errors encountered.", errs.len());
+        }
+
         Err(errs)
     }
 }
