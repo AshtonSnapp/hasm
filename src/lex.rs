@@ -318,47 +318,362 @@ fn directive_large(lex: &mut Lexer<Token>) -> Result<DirectiveType, ()> {
     }
 }
 
-fn addr_abs_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+fn addr_abs_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
+    let slice: &str = lex.slice();
 
-fn addr_port_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 8, slice.len()), 10);
 
-fn addr_zero_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+    match poss_addr {
+        Ok(t) => {
+            if t > 16777215 || t < 0 {
+                Err(())
+            } else {
+                Ok(AddressInfo { addr_type: AddressType::Absolute, base: NumBase::Decimal, val: t })
+            }
+        },
+        Err(e) => Err(())
+    }
+}
 
-fn addr_dp_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+fn addr_port_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
+    let slice: &str = lex.slice();
 
-fn addr_ipr_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 6, slice.len() - 1), 10);
 
-fn addr_spr_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+    match poss_addr {
+        Ok(t) => {
+            if t > 65535 || t < 0 {
+                Err(())
+            } else {
+                Ok(AddressInfo { addr_type: AddressType::Port, base: NumBase::Decimal, val: t })
+            }
+        },
+        Err(e) => Err(())
+    }
+}
 
-fn addr_ind_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+fn addr_zero_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
+    let slice: &str = lex.slice();
 
-fn addr_abs_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 5, slice.len()), 10);
 
-fn addr_port_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+    match poss_addr {
+        Ok(t) => {
+            if t > 65535 || t < 0 {
+                Err(())
+            } else {
+                Ok(AddressInfo { addr_type: AddressType::ZeroBank, base: NumBase::Decimal, val: t })
+            }
+        },
+        Err(e) => Err(())
+    }
+}
 
-fn addr_zero_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+fn addr_dp_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
+    let slice: &str = lex.slice();
 
-fn addr_dp_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 3, slice.len()), 10);
 
-fn addr_ipr_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+    match poss_addr {
+        Ok(t) => {
+            if t > 255 || t < 0 {
+                Err(())
+            } else {
+                Ok(AddressInfo { addr_type: AddressType::DirectPage, base: NumBase::Decimal, val: t })
+            }
+        },
+        Err(e) => Err(())
+    }
+}
 
-fn addr_spr_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+fn addr_ipr_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
+    let slice: &str = lex.slice();
 
-fn addr_ind_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&*format!("{}{}", &slice.substring(slice.len() - 6, slice.len() - 6), &slice.substring(slice.len() - 5, slice.len())), 10);
 
-fn addr_abs_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+    match poss_addr {
+        Ok(t) => {
+            if t > 32767 || t < -32768 {
+                Err(())
+            } else {
+                Ok(AddressInfo { addr_type: AddressType::InstructionPtrRelative, base: NumBase::Decimal, val: t })
+            }
+        },
+        Err(e) => Err(())
+    }
+}
 
-fn addr_port_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+fn addr_spr_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
+    let slice: &str = lex.slice();
 
-fn addr_zero_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&*format!("{}{}", &slice.substring(slice.len() - 6, slice.len() - 6), &slice.substring(slice.len() - 5, slice.len())), 10);
 
-fn addr_dp_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+    match poss_addr {
+        Ok(t) => {
+            if t > 32767 || t < -32768 {
+                Err(())
+            } else {
+                Ok(AddressInfo { addr_type: AddressType::StackPtrRelative, base: NumBase::Decimal, val: t })
+            }
+        },
+        Err(e) => Err(())
+    }
+}
 
-fn addr_ipr_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+fn addr_ind_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
+    let slice: &str = lex.slice();
 
-fn addr_spr_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 9, slice.len() - 1), 10);
 
-fn addr_ind_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {}
+    match poss_addr {
+        Ok(t) => {
+            if t > 16777215 || t < 0 {
+                Err(())
+            } else {
+                Ok(AddressInfo { addr_type: AddressType::Indirect, base: NumBase::Decimal, val: t })
+            }
+        },
+        Err(e) => Err(())
+    }
+}
+
+fn addr_abs_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
+    let slice: &str = lex.slice();
+
+    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 6, slice.len()), 16);
+
+    match poss_addr {
+        Ok(t) => {
+            if t > 16777215 || t < 0 {
+                Err(())
+            } else {
+                Ok(AddressInfo { addr_type: AddressType::Absolute, base: NumBase::Hexadecimal, val: t })
+            }
+        },
+        Err(e) => Err(())
+    }
+}
+
+fn addr_port_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
+    let slice: &str = lex.slice();
+
+    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 5, slice.len() - 1), 16);
+
+    match poss_addr {
+        Ok(t) => {
+            if t > 65535 || t < 0 {
+                Err(())
+            } else {
+                Ok(AddressInfo { addr_type: AddressType::Port, base: NumBase::Hexadecimal, val: t })
+            }
+        },
+        Err(e) => Err(())
+    }
+}
+
+fn addr_zero_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
+    let slice: &str = lex.slice();
+
+    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 4, slice.len()), 16);
+
+    match poss_addr {
+        Ok(t) => {
+            if t > 65535 || t < 0 {
+                Err(())
+            } else {
+                Ok(AddressInfo { addr_type: AddressType::ZeroBank, base: NumBase::Hexadecimal, val: t })
+            }
+        },
+        Err(e) => Err(())
+    }
+}
+
+fn addr_dp_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
+    let slice: &str = lex.slice();
+
+    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 2, slice.len()), 16);
+
+    match poss_addr {
+        Ok(t) => {
+            if t > 255 || t < 0 {
+                Err(())
+            } else {
+                Ok(AddressInfo { addr_type: AddressType::DirectPage, base: NumBase::Hexadecimal, val: t })
+            }
+        },
+        Err(e) => Err(())
+    }
+}
+
+fn addr_ipr_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
+    let slice: &str = lex.slice();
+
+    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&*format!("{}{}", &slice.substring(slice.len() - 6, slice.len() - 6), &slice.substring(slice.len() - 5, slice.len())), 16);
+
+    match poss_addr {
+        Ok(t) => {
+            if t > 32767 || t < -32768 {
+                Err(())
+            } else {
+                Ok(AddressInfo { addr_type: AddressType::InstructionPtrRelative, base: NumBase::Hexadecimal, val: t })
+            }
+        },
+        Err(e) => Err(())
+    }
+}
+
+fn addr_spr_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
+    let slice: &str = lex.slice();
+
+    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&*format!("{}{}", &slice.substring(slice.len() - 6, slice.len() - 6), &slice.substring(slice.len() - 5, slice.len())), 16);
+
+    match poss_addr {
+        Ok(t) => {
+            if t > 32767 || t < -32768 {
+                Err(())
+            } else {
+                Ok(AddressInfo { addr_type: AddressType::StackPtrRelative, base: NumBase::Hexadecimal, val: t })
+            }
+        },
+        Err(e) => Err(())
+    }
+}
+
+fn addr_ind_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
+    let slice: &str = lex.slice();
+
+    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 7, slice.len() - 1), 16);
+
+    match poss_addr {
+        Ok(t) => {
+            if t > 16777215 || t < 0 {
+                Err(())
+            } else {
+                Ok(AddressInfo { addr_type: AddressType::Indirect, base: NumBase::Hexadecimal, val: t })
+            }
+        },
+        Err(e) => Err(())
+    }
+}
+
+fn addr_abs_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
+    let slice: &str = lex.slice();
+
+    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 24, slice.len()), 2);
+
+    match poss_addr {
+        Ok(t) => {
+            if t > 16777215 || t < 0 {
+                Err(())
+            } else {
+                Ok(AddressInfo { addr_type: AddressType::Absolute, base: NumBase::Binary, val: t })
+            }
+        },
+        Err(e) => Err(())
+    }
+}
+
+fn addr_port_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
+    let slice: &str = lex.slice();
+
+    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 17, slice.len() - 1), 2);
+
+    match poss_addr {
+        Ok(t) => {
+            if t > 65535 || t < 0 {
+                Err(())
+            } else {
+                Ok(AddressInfo { addr_type: AddressType::Port, base: NumBase::Binary, val: t })
+            }
+        },
+        Err(e) => Err(())
+    }
+}
+
+fn addr_zero_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
+    let slice: &str = lex.slice();
+
+    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 16, slice.len()), 2);
+
+    match poss_addr {
+        Ok(t) => {
+            if t > 65535 || t < 0 {
+                Err(())
+            } else {
+                Ok(AddressInfo { addr_type: AddressType::ZeroBank, base: NumBase::Binary, val: t })
+            }
+        },
+        Err(e) => Err(())
+    }
+}
+
+fn addr_dp_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
+    let slice: &str = lex.slice();
+
+    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 8, slice.len()), 2);
+
+    match poss_addr {
+        Ok(t) => {
+            if t > 255 || t < 0 {
+                Err(())
+            } else {
+                Ok(AddressInfo { addr_type: AddressType::DirectPage, base: NumBase::Binary, val: t })
+            }
+        },
+        Err(e) => Err(())
+    }
+}
+
+fn addr_ipr_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
+    let slice: &str = lex.slice();
+
+    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&*format!("{}{}", &slice.substring(slice.len() - 18, slice.len() - 18), &slice.substring(slice.len() - 16, slice.len())), 2);
+
+    match poss_addr {
+        Ok(t) => {
+            if t > 32767 || t < -32768 {
+                Err(())
+            } else {
+                Ok(AddressInfo { addr_type: AddressType::InstructionPtrRelative, base: NumBase::Binary, val: t })
+            }
+        },
+        Err(e) => Err(())
+    }
+}
+
+fn addr_spr_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
+    let slice: &str = lex.slice();
+
+    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&*format!("{}{}", &slice.substring(slice.len() - 18, slice.len() - 18), &slice.substring(slice.len() - 16, slice.len())), 2);
+
+    match poss_addr {
+        Ok(t) => {
+            if t > 32767 || t < -32768 {
+                Err(())
+            } else {
+                Ok(AddressInfo { addr_type: AddressType::StackPtrRelative, base: NumBase::Binary, val: t })
+            }
+        },
+        Err(e) => Err(())
+    }
+}
+
+fn addr_ind_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
+    let slice: &str = lex.slice();
+
+    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 25, slice.len() - 1), 2);
+
+    match poss_addr {
+        Ok(t) => {
+            if t > 16777215 || t < 0 {
+                Err(())
+            } else {
+                Ok(AddressInfo { addr_type: AddressType::Indirect, base: NumBase::Binary, val: t })
+            }
+        },
+        Err(e) => Err(())
+    }
+}
 
 fn imm_dec(lex: &mut Lexer<Token>) -> Result<ImmediateInfo, ()> {
     let slice: &str = lex.slice();
