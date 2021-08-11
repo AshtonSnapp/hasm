@@ -1,12 +1,12 @@
 use logos::{Logos, Lexer};
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Lines};
-use std::iter::{Enumerate, Rev};
+use std::iter::{Enumerate};
 use std::num::ParseIntError;
-use std::str::CharIndices;
 use substring::Substring;
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum RegisterIdent {
     IntegerAccumulator,         // iA
     IntegerAccumulatorHigh,     // iAH
@@ -18,19 +18,19 @@ pub enum RegisterIdent {
     IntegerYIndex               // iY
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum IdentifierType {
     Label,  // Used to "label" a spot in the source file that instructions can refer to
     Symbol, // Used to make easy-to-read "symbols" that correspond to some sort of address outside of the program or commonly-used immediate
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct IdentifierInfo {
     itype: IdentifierType,
     val: String
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum InstructionType {
     NoOperation,
     MoveData,
@@ -85,7 +85,7 @@ pub enum InstructionType {
     BranchGreaterEqualSigned
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum DirectiveType {
     SetOrigin,                  // .org
     MakeSymbol,                 // .sym
@@ -98,7 +98,7 @@ pub enum DirectiveType {
     ImportBinary,               // .bin
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum AddressType {
     Absolute,                   // 24-bits                  Example: $FFFFFF
     Port,                       // 16-bits                  Example: $FFFFp
@@ -109,20 +109,20 @@ pub enum AddressType {
     Indirect,                   // 24-bits                  Example: ($FFFFFF)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum NumBase {
     Hexadecimal,                // 0 1 2 3 4 5 6 7 8 9 A B C D E F 10
     Decimal,                    // 0 1 2 3 4 5 6 7 8 9 10
     Binary                      // 0 1 10
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ImmediateInfo {
     base: NumBase,
     val: u16
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AddressInfo {
     addr_type: AddressType,
     base: NumBase,
@@ -158,23 +158,22 @@ fn small_register(lex: &mut Lexer<Token>) -> Result<RegisterIdent, ()> {
 }
 
 fn label(lex: &mut Lexer<Token>) -> Result<IdentifierInfo, ()> {
-    let slice: &str = lex.slice();
+    let mut slice: &str = lex.slice();
 
-    todo!("label callback unimplemented at the moment, sorry!");
-    /* How do I do this?
-     * I'll need to go backwards from the end of slice until I've seen a : and a space
-     * That's the best way I can think of to go about this, but how would I do that?
-     */
+    slice = slice.substring(0, slice.len() - 1);
+
+    Ok(IdentifierInfo { itype: IdentifierType::Label, val: slice.to_string() })
 }
 
 fn symbol(lex: &mut Lexer<Token>) -> Result<IdentifierInfo, ()> {
-    let slice: &str = lex.slice();
+    let mut slice: &str = lex.slice();
 
-    todo!("symbol callback unimplemented at the moment, sorry!");
-    /* How do I do this?
-     * I'll need to go backwards from the end of slice until I've seen a space
-     * That's the best way I can think of to go about this, but how would I do that?
-     */
+    if slice.ends_with(',') {
+        slice = slice.substring(0, slice.len() - 1);
+        Ok(IdentifierInfo { itype: IdentifierType::Symbol, val: slice.to_string() })
+    } else {
+        Ok(IdentifierInfo { itype: IdentifierType::Symbol, val: slice.to_string() })
+    }
 }
 
 fn instruction_small(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
@@ -331,7 +330,7 @@ fn addr_abs_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
                 Ok(AddressInfo { addr_type: AddressType::Absolute, base: NumBase::Decimal, val: t })
             }
         },
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -348,7 +347,7 @@ fn addr_port_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
                 Ok(AddressInfo { addr_type: AddressType::Port, base: NumBase::Decimal, val: t })
             }
         },
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -365,7 +364,7 @@ fn addr_zero_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
                 Ok(AddressInfo { addr_type: AddressType::ZeroBank, base: NumBase::Decimal, val: t })
             }
         },
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -382,7 +381,7 @@ fn addr_dp_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
                 Ok(AddressInfo { addr_type: AddressType::DirectPage, base: NumBase::Decimal, val: t })
             }
         },
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -399,7 +398,7 @@ fn addr_ipr_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
                 Ok(AddressInfo { addr_type: AddressType::InstructionPtrRelative, base: NumBase::Decimal, val: t })
             }
         },
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -416,7 +415,7 @@ fn addr_spr_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
                 Ok(AddressInfo { addr_type: AddressType::StackPtrRelative, base: NumBase::Decimal, val: t })
             }
         },
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -433,7 +432,7 @@ fn addr_ind_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
                 Ok(AddressInfo { addr_type: AddressType::Indirect, base: NumBase::Decimal, val: t })
             }
         },
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -450,7 +449,7 @@ fn addr_abs_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
                 Ok(AddressInfo { addr_type: AddressType::Absolute, base: NumBase::Hexadecimal, val: t })
             }
         },
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -467,7 +466,7 @@ fn addr_port_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
                 Ok(AddressInfo { addr_type: AddressType::Port, base: NumBase::Hexadecimal, val: t })
             }
         },
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -484,7 +483,7 @@ fn addr_zero_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
                 Ok(AddressInfo { addr_type: AddressType::ZeroBank, base: NumBase::Hexadecimal, val: t })
             }
         },
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -501,7 +500,7 @@ fn addr_dp_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
                 Ok(AddressInfo { addr_type: AddressType::DirectPage, base: NumBase::Hexadecimal, val: t })
             }
         },
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -518,7 +517,7 @@ fn addr_ipr_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
                 Ok(AddressInfo { addr_type: AddressType::InstructionPtrRelative, base: NumBase::Hexadecimal, val: t })
             }
         },
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -535,7 +534,7 @@ fn addr_spr_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
                 Ok(AddressInfo { addr_type: AddressType::StackPtrRelative, base: NumBase::Hexadecimal, val: t })
             }
         },
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -552,7 +551,7 @@ fn addr_ind_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
                 Ok(AddressInfo { addr_type: AddressType::Indirect, base: NumBase::Hexadecimal, val: t })
             }
         },
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -569,7 +568,7 @@ fn addr_abs_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
                 Ok(AddressInfo { addr_type: AddressType::Absolute, base: NumBase::Binary, val: t })
             }
         },
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -586,7 +585,7 @@ fn addr_port_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
                 Ok(AddressInfo { addr_type: AddressType::Port, base: NumBase::Binary, val: t })
             }
         },
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -603,7 +602,7 @@ fn addr_zero_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
                 Ok(AddressInfo { addr_type: AddressType::ZeroBank, base: NumBase::Binary, val: t })
             }
         },
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -620,7 +619,7 @@ fn addr_dp_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
                 Ok(AddressInfo { addr_type: AddressType::DirectPage, base: NumBase::Binary, val: t })
             }
         },
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -637,7 +636,7 @@ fn addr_ipr_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
                 Ok(AddressInfo { addr_type: AddressType::InstructionPtrRelative, base: NumBase::Binary, val: t })
             }
         },
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -654,7 +653,7 @@ fn addr_spr_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
                 Ok(AddressInfo { addr_type: AddressType::StackPtrRelative, base: NumBase::Binary, val: t })
             }
         },
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -671,7 +670,7 @@ fn addr_ind_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
                 Ok(AddressInfo { addr_type: AddressType::Indirect, base: NumBase::Binary, val: t })
             }
         },
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -682,7 +681,7 @@ fn imm_dec(lex: &mut Lexer<Token>) -> Result<ImmediateInfo, ()> {
 
     match poss_imm {
         Ok(t) => Ok(ImmediateInfo { base: NumBase::Decimal, val: t}),
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -699,7 +698,7 @@ fn small_imm_dec(lex: &mut Lexer<Token>) -> Result<ImmediateInfo, ()> {
                 Ok(ImmediateInfo { base: NumBase::Decimal, val: t })
             }
         },
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -710,7 +709,7 @@ fn imm_hex(lex: &mut Lexer<Token>) -> Result<ImmediateInfo, ()> {
 
     match poss_imm {
         Ok(t) => Ok(ImmediateInfo { base: NumBase::Hexadecimal, val: t}),
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -727,7 +726,7 @@ fn small_imm_hex(lex: &mut Lexer<Token>) -> Result<ImmediateInfo, ()> {
                 Ok(ImmediateInfo { base: NumBase::Hexadecimal, val: t })
             }
         },
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -738,7 +737,7 @@ fn imm_bin(lex: &mut Lexer<Token>) -> Result<ImmediateInfo, ()> {
 
     match poss_imm {
         Ok(t) => Ok(ImmediateInfo { base: NumBase::Binary, val: t}),
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
@@ -755,19 +754,159 @@ fn small_imm_bin(lex: &mut Lexer<Token>) -> Result<ImmediateInfo, ()> {
                 Ok(ImmediateInfo { base: NumBase::Binary, val: t })
             }
         },
-        Err(e) => Err(())
+        Err(_e) => Err(())
     }
 }
 
 fn string(lex: &mut Lexer<Token>) -> Result<Vec<u8>, ()> {
     let slice: &str = lex.slice();
 
-    todo!("string callback unimplemented at the moment, sorry!");
-    /* How do I do this?
-     * I'll need to go backwards from the end of the slice until I've seen two "s
-     * That's the best way I can think of to go about this, but how would I do that?
-     * Also, I need to check if the " has a backslash before it.
-     */
+    let string: &str = slice.substring(1, slice.len() - 1);
+    let mut charvec: Vec<u8> = Vec::new();
+    let mut err_count: u8 = 0;
+
+    // TODO: Figure out a way to detect escape sequences and replace them with a single character.
+    // TODO: Also, how to extended ascii
+
+    for char in string.chars() {
+        match char {
+            '\x00' => charvec.push(0),
+            '\x01' => charvec.push(1),
+            '\x02' => charvec.push(2),
+            '\x03' => charvec.push(3),
+            '\x04' => charvec.push(4),
+            '\x05' => charvec.push(5),
+            '\x06' => charvec.push(6),
+            '\x07' => charvec.push(7),
+            '\x08' => charvec.push(8),
+            '\x09' => charvec.push(9),
+            '\x0A' => charvec.push(10),
+            '\x0B' => charvec.push(11),
+            '\x0C' => charvec.push(12),
+            '\x0D' => charvec.push(13),
+            '\x0E' => charvec.push(14),
+            '\x0F' => charvec.push(15),
+            '\x10' => charvec.push(16),
+            '\x11' => charvec.push(17),
+            '\x12' => charvec.push(18),
+            '\x13' => charvec.push(19),
+            '\x14' => charvec.push(20),
+            '\x15' => charvec.push(21),
+            '\x16' => charvec.push(22),
+            '\x17' => charvec.push(23),
+            '\x18' => charvec.push(24),
+            '\x19' => charvec.push(25),
+            '\x1A' => charvec.push(26),
+            '\x1B' => charvec.push(27),
+            '\x1C' => charvec.push(28),
+            '\x1D' => charvec.push(29),
+            '\x1E' => charvec.push(30),
+            '\x1F' => charvec.push(31),
+            '\x20' => charvec.push(32),
+            '\x21' => charvec.push(33),
+            '\x22' => charvec.push(34),
+            '\x23' => charvec.push(35),
+            '\x24' => charvec.push(36),
+            '\x25' => charvec.push(37),
+            '\x26' => charvec.push(38),
+            '\x27' => charvec.push(39),
+            '\x28' => charvec.push(40),
+            '\x29' => charvec.push(41),
+            '\x2A' => charvec.push(42),
+            '\x2B' => charvec.push(43),
+            '\x2C' => charvec.push(44),
+            '\x2D' => charvec.push(45),
+            '\x2E' => charvec.push(46),
+            '\x2F' => charvec.push(47),
+            '\x30' => charvec.push(48),
+            '\x31' => charvec.push(49),
+            '\x32' => charvec.push(50),
+            '\x33' => charvec.push(51),
+            '\x34' => charvec.push(52),
+            '\x35' => charvec.push(53),
+            '\x36' => charvec.push(54),
+            '\x37' => charvec.push(55),
+            '\x38' => charvec.push(56),
+            '\x39' => charvec.push(57),
+            '\x3A' => charvec.push(58),
+            '\x3B' => charvec.push(59),
+            '\x3C' => charvec.push(60),
+            '\x3D' => charvec.push(61),
+            '\x3E' => charvec.push(62),
+            '\x3F' => charvec.push(63),
+            '\x40' => charvec.push(64),
+            '\x41' => charvec.push(65),
+            '\x42' => charvec.push(66),
+            '\x43' => charvec.push(67),
+            '\x44' => charvec.push(68),
+            '\x45' => charvec.push(69),
+            '\x46' => charvec.push(70),
+            '\x47' => charvec.push(71),
+            '\x48' => charvec.push(72),
+            '\x49' => charvec.push(73),
+            '\x4A' => charvec.push(74),
+            '\x4B' => charvec.push(75),
+            '\x4C' => charvec.push(76),
+            '\x4D' => charvec.push(77),
+            '\x4E' => charvec.push(78),
+            '\x4F' => charvec.push(79),
+            '\x50' => charvec.push(80),
+            '\x51' => charvec.push(81),
+            '\x52' => charvec.push(82),
+            '\x53' => charvec.push(83),
+            '\x54' => charvec.push(84),
+            '\x55' => charvec.push(85),
+            '\x56' => charvec.push(86),
+            '\x57' => charvec.push(87),
+            '\x58' => charvec.push(88),
+            '\x59' => charvec.push(89),
+            '\x5A' => charvec.push(90),
+            '\x5B' => charvec.push(91),
+            '\x5C' => charvec.push(92),
+            '\x5D' => charvec.push(93),
+            '\x5E' => charvec.push(94),
+            '\x5F' => charvec.push(95),
+            '\x60' => charvec.push(96),
+            '\x61' => charvec.push(97),
+            '\x62' => charvec.push(98),
+            '\x63' => charvec.push(99),
+            '\x64' => charvec.push(100),
+            '\x65' => charvec.push(101),
+            '\x66' => charvec.push(102),
+            '\x67' => charvec.push(103),
+            '\x68' => charvec.push(104),
+            '\x69' => charvec.push(105),
+            '\x6A' => charvec.push(106),
+            '\x6B' => charvec.push(107),
+            '\x6C' => charvec.push(108),
+            '\x6D' => charvec.push(109),
+            '\x6E' => charvec.push(110),
+            '\x6F' => charvec.push(111),
+            '\x70' => charvec.push(112),
+            '\x71' => charvec.push(113),
+            '\x72' => charvec.push(114),
+            '\x73' => charvec.push(115),
+            '\x74' => charvec.push(116),
+            '\x75' => charvec.push(117),
+            '\x76' => charvec.push(118),
+            '\x77' => charvec.push(119),
+            '\x78' => charvec.push(120),
+            '\x79' => charvec.push(121),
+            '\x7A' => charvec.push(122),
+            '\x7B' => charvec.push(123),
+            '\x7C' => charvec.push(124),
+            '\x7D' => charvec.push(125),
+            '\x7E' => charvec.push(126),
+            '\x7F' => charvec.push(127),
+            _ => err_count += 1
+        };
+    }
+
+    if err_count == 0 {
+        Ok(charvec)
+    } else {
+        Err(())
+    }
 }
 
 fn char(lex: &mut Lexer<Token>) -> Result<u8, ()> {
@@ -1196,7 +1335,7 @@ fn char_esc_hex(lex: &mut Lexer<Token>) -> Result<u8, ()> {
     }
 }
 
-#[derive(Logos, Debug)]
+#[derive(Logos, Debug, Serialize, Deserialize)]
 pub enum Token {
     #[regex(r";[^\r\n]*(\r\n|\n)?", logos::skip)]
     #[regex(r"[ \t\n\f]+", logos::skip)]
@@ -1258,7 +1397,7 @@ pub enum Token {
     Instruction(InstructionType),
 
     #[regex(r"[a-zA-Z_-]+:", label)]
-    #[regex(r"[a-zA-Z_-]+", symbol)]
+    #[regex(r"[a-zA-Z_-]+,?", symbol)]
     Identifier(IdentifierInfo),
 
     #[regex(r"i[ABXY]", register)]

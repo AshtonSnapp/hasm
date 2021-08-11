@@ -18,14 +18,15 @@ fn main() {
         verbose = false;
     }
 
-    // Check for custom outfile name
-    if matches.is_present("output") {
-        let outfile_name = Path::new(matches.value_of("output").unwrap());
-    }
-
     // Infile set as required in cli.yml, so there's no need to check if it's present.
     // If it wasn't present, the program would have exited already.
     let infile_name = Path::new(matches.value_of("INPUT").unwrap());
+
+    // Outfile name is also required.
+    let outfile_name = Path::new(matches.value_of("output").unwrap());
+
+    // Mode isn't techincally required, but it has a default value of "full".
+    let mode = matches.value_of("mode").unwrap();
 
     // Let's open the file.
     let file = File::open(infile_name);
@@ -35,27 +36,56 @@ fn main() {
 
         // The file did indeed open!
         Ok(f) => {
-            let poss_tokens = lex::tok(f, verbose);
-            match poss_tokens {
-                Ok(t) => {},
-                Err(e) => {
-                    if verbose {
-                        exit(1);
-                    } else {
-                        for err in &e {
-                            eprintln!("{}", err);
+            if mode == "full" || mode == "lex" {
+                let poss_tokens = lex::tok(f, verbose);
+                match poss_tokens {
+                    Ok(t) => {
+                        if mode == "lex" {
+                            let outfile = File::create(outfile_name);
+
+                            match outfile {
+                                Ok(of) => {
+                                    if let Ok(_t) = serde_json::to_writer_pretty(of, &t) {
+                                        if verbose {
+                                            println!("[INFO] Successfully wrote JSON to outfile.");
+                                        }
+                                    } else {
+                                        eprintln!("[ERR!] Failed to write JSON to outfile.");
+                                        exit(1);
+                                    }
+                                },
+                                Err(_e) => {
+                                    eprintln!("[ERR!] Failed to create or access outfile.");
+                                    exit(1);
+                                }
+                            }
                         }
+                    },
+                    Err(e) => {
+                        if verbose {
+                            exit(1);
+                        } else {
+                            for err in &e {
+                                eprintln!("{}", err);
+                            }
 
-                        eprintln!("[INFO] {} errors encountered.", e.len());
+                            eprintln!("[INFO] {} errors encountered.", e.len());
 
-                        exit(1);
+                            exit(1);
+                        }
                     }
                 }
+            } else if mode == "parse" {
+                eprintln!("[ERR!] Parser not currently implemented.");
+                exit(1);
+            } else {
+                eprintln!("[ERR!] Invalid mode parameter.");
+                exit(1);
             }
         },
 
         // The file didn't actually open, crap!
-        Err(e) => {
+        Err(_e) => {
             eprintln!("[ERR!] Cannot open input file. Please check to make sure that the file actually exists.");
             exit(1);
         }
