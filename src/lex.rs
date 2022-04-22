@@ -1,1471 +1,1110 @@
+//--> Imports <--
+
+use crate::StringList;
 use logos::{Logos, Lexer};
-use std::fs::File;
-use std::io::{self, BufRead, BufReader, Lines};
-use std::iter::{Enumerate};
-use std::num::ParseIntError;
-use substring::Substring;
-use serde::{Serialize, Deserialize};
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
+use std::fs::{File};
+use std::io::{BufRead, BufReader, ErrorKind};
+use std::fmt;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub enum RegisterIdent {
-    IntegerAccumulator,         // iA
-    IntegerAccumulatorHigh,     // iAH
-    IntegerAccumulatorLow,      // iAL
-    IntegerBAccumulator,        // iB
-    IntegerBAccumulatorHigh,    // iBH
-    IntegerBAccumulatorLow,     // iBL
-    IntegerXIndex,              // iX
-    IntegerYIndex               // iY
-}
+//--> Type Aliases <--
 
-#[derive(Debug, Serialize, Deserialize)]
-pub enum IdentifierType {
-    Label,  // Used to "label" a spot in the source file that instructions can refer to
-    Symbol, // Used to make easy-to-read "symbols" that correspond to some sort of address outside of the program or commonly-used immediate
-}
+pub type TokenStream = Vec<Token>;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct IdentifierInfo {
-    itype: IdentifierType,
-    val: String
-}
+type TokenResult = Result<TokenStream, StringList>;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub enum InstructionType {
-    NoOperation,
-    MoveData,
-    HaltAndCatchFire,
-    MoveDataXIndexed,
-    MoveDataYIndexed,
-    SetDirectPage,
-    SetStackBank,
-    GetStackBank,
-    PushRegister,
-    PushIntegerFlags,
-    PullRegister,
-    PullIntegerFlags,
-    AddIntegers,
-    AddIntegersCarry,
-    SubtractIntegers,
-    SubtractIntegersCarry,
-    BitwiseNot,
-    BitwiseAnd,
-    BitwiseOr,
-    BitwiseExclusiveOr,
-    BitwiseShiftLeft,
-    BitwiseShiftRight,
-    BitwiseRotateLeft,
-    BitwiseRotateRight,
-    BitwiseSetRegisterBit,
-    BitwiseSetIntegerFlag,
-    BitwiseClearRegisterBit,
-    BitwiseClearIntegerFlag,
-    BitwisePopulationCount,
-    BitwiseVacancyCount,
-    Jump,
-    JumpXIndexed,
-    JumpYIndexed,
-    CallSubroutine,
-    CompareIntegers,
-    TestRegisterBit,
-    TestIntegerFlag,
-    BranchEqual,
-    BranchNotEqual,
-    BranchLessThanUnsigned,
-    BranchLessThanSigned,
-    BranchGreaterThanUnsigned,
-    BranchGreaterThanSigned,
-    ReturnFromSubroutine,
-    ReturnFromInterrupt,
-    Break,
-    WaitForInterrupt,
-    BranchLessEqualUnsigned,
-    BranchLessEqualSigned,
-    BranchGreaterEqualUnsigned,
-    BranchGreaterEqualSigned
-}
+//--> Enums <--
 
-#[derive(Debug, Serialize, Deserialize)]
-pub enum DirectiveType {
-    SetOrigin,                  // .org
-    MakeSymbol,                 // .sym
-    PlaceByte,                  // .byte
-    PlaceWord,                  // .word
-    PlaceVector,                // .vec
-    PlaceString,                // .str
-    PlaceStringNullTerminated,  // .strz
-    ImportAssembly,             // .asm
-    ImportBinary,               // .bin
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum AddressType {
-    Absolute,                   // 24-bits                  Example: $FFFFFF
-    Port,                       // 16-bits                  Example: $FFFFp
-    ZeroBank,                   // 16-bits                  Example: $FFFF
-    DirectPage,                 // 8-bits                   Example: $FF
-    InstructionPtrRelative,     // 16-bits two's complement Example: IP+$7FFF or IP-$8000
-    StackPtrRelative,           // 16-bits two's complement Example: SP+$7FFF or SP-$8000
-    Indirect,                   // 24-bits                  Example: ($FFFFFF)
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum NumBase {
-    Hexadecimal,                // 0 1 2 3 4 5 6 7 8 9 A B C D E F 10
-    Decimal,                    // 0 1 2 3 4 5 6 7 8 9 10
-    Binary                      // 0 1 10
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ImmediateInfo {
-    base: NumBase,
-    val: u16
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct AddressInfo {
-    addr_type: AddressType,
-    base: NumBase,
-    val: i32
-}
-
-fn register(lex: &mut Lexer<Token>) -> Result<RegisterIdent, ()> {
-    let slice: &str = lex.slice();
-
-    let reg: &str = &slice.substring(slice.len() - 1, slice.len());
-
-    match reg {
-        "A" => Ok(RegisterIdent::IntegerAccumulator),
-        "B" => Ok(RegisterIdent::IntegerBAccumulator),
-        "X" => Ok(RegisterIdent::IntegerXIndex),
-        "Y" => Ok(RegisterIdent::IntegerYIndex),
-        _ => Err(())
-    }
-}
-
-fn small_register(lex: &mut Lexer<Token>) -> Result<RegisterIdent, ()> {
-    let slice: &str = lex.slice();
-
-    let reg: &str = &slice.substring(slice.len() - 2, slice.len() - 1);
-
-    match reg {
-        "AH" => Ok(RegisterIdent::IntegerAccumulatorHigh),
-        "AL" => Ok(RegisterIdent::IntegerAccumulatorLow),
-        "BH" => Ok(RegisterIdent::IntegerBAccumulatorHigh),
-        "BL" => Ok(RegisterIdent::IntegerBAccumulatorLow),
-        _ => Err(())
-    }
-}
-
-fn label(lex: &mut Lexer<Token>) -> Result<IdentifierInfo, ()> {
-    let mut slice: &str = lex.slice();
-
-    slice = slice.substring(0, slice.len() - 1);
-
-    Ok(IdentifierInfo { itype: IdentifierType::Label, val: slice.to_string() })
-}
-
-fn symbol(lex: &mut Lexer<Token>) -> Result<IdentifierInfo, ()> {
-    let mut slice: &str = lex.slice();
-
-    if slice.ends_with(',') {
-        slice = slice.substring(0, slice.len() - 1);
-        Ok(IdentifierInfo { itype: IdentifierType::Symbol, val: slice.to_string() })
-    } else {
-        Ok(IdentifierInfo { itype: IdentifierType::Symbol, val: slice.to_string() })
-    }
-}
-
-fn instruction_small(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_inst: &str = &slice.substring(slice.len() - 2, slice.len()).to_lowercase();
-
-    // baby function lol
-
-    match poss_inst {
-        "or" => Ok(InstructionType::BitwiseOr),
-        _ => Err(())
-    }
-}
-
-fn instruction(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_inst: &str = &slice.substring(slice.len() - 3, slice.len()).to_lowercase();
-
-    match poss_inst {
-        "mov" => Ok(InstructionType::MoveData),
-        "not" => Ok(InstructionType::BitwiseNot),
-        "and" => Ok(InstructionType::BitwiseAnd),
-        "xor" => Ok(InstructionType::BitwiseExclusiveOr),
-        "shl" => Ok(InstructionType::BitwiseShiftLeft),
-        "shr" => Ok(InstructionType::BitwiseShiftRight),
-        "rol" => Ok(InstructionType::BitwiseRotateLeft),
-        "ror" => Ok(InstructionType::BitwiseRotateRight),
-        "set" => Ok(InstructionType::BitwiseSetRegisterBit),
-        "clr" => Ok(InstructionType::BitwiseClearRegisterBit),
-        "brk" => Ok(InstructionType::Break),
-        _ => Err(())
-    }
-}
-
-fn instruction_large(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_inst: &str = &slice.substring(slice.len() - 4, slice.len()).to_lowercase();
-
-    match poss_inst {
-        "noop" => Ok(InstructionType::NoOperation),
-        "hacf" => Ok(InstructionType::HaltAndCatchFire),
-        "movx" => Ok(InstructionType::MoveDataXIndexed),
-        "movy" => Ok(InstructionType::MoveDataYIndexed),
-        "push" => Ok(InstructionType::PushRegister),
-        "pull" => Ok(InstructionType::PullRegister),
-        "addi" => Ok(InstructionType::AddIntegers),
-        "adci" => Ok(InstructionType::AddIntegersCarry),
-        "subi" => Ok(InstructionType::SubtractIntegers),
-        "sbci" => Ok(InstructionType::SubtractIntegersCarry),
-        "pcnt" => Ok(InstructionType::BitwisePopulationCount),
-        "vcnt" => Ok(InstructionType::BitwiseVacancyCount),
-        "jump" => Ok(InstructionType::Jump),
-        "call" => Ok(InstructionType::CallSubroutine),
-        "cmpi" => Ok(InstructionType::CompareIntegers),
-        "test" => Ok(InstructionType::TestRegisterBit),
-        "bequ" => Ok(InstructionType::BranchEqual),
-        "bneq" => Ok(InstructionType::BranchNotEqual),
-        "bltu" => Ok(InstructionType::BranchLessThanUnsigned),
-        "blts" => Ok(InstructionType::BranchLessThanSigned),
-        "bgtu" => Ok(InstructionType::BranchGreaterThanUnsigned),
-        "bgts" => Ok(InstructionType::BranchGreaterThanSigned),
-        "rets" => Ok(InstructionType::ReturnFromSubroutine),
-        "reti" => Ok(InstructionType::ReturnFromInterrupt),
-        "wait" => Ok(InstructionType::WaitForInterrupt),
-        "bleu" => Ok(InstructionType::BranchLessEqualUnsigned),
-        "bles" => Ok(InstructionType::BranchLessEqualSigned),
-        "bgeu" => Ok(InstructionType::BranchGreaterEqualUnsigned),
-        "bges" => Ok(InstructionType::BranchGreaterEqualSigned),
-        _ => Err(())
-    }
-}
-
-fn instruction_xlarge(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_inst: &str = &slice.substring(slice.len() - 5, slice.len()).to_lowercase();
-
-    match poss_inst {
-        "setdp" => Ok(InstructionType::SetDirectPage),
-        "setsb" => Ok(InstructionType::SetStackBank),
-        "getsb" => Ok(InstructionType::GetStackBank),
-        "setif" => Ok(InstructionType::BitwiseSetIntegerFlag),
-        "clrif" => Ok(InstructionType::BitwiseClearIntegerFlag),
-        "jumpx" => Ok(InstructionType::JumpXIndexed),
-        "jumpy" => Ok(InstructionType::JumpYIndexed),
-        _ => Err(())
-    }
-}
-
-fn instruction_xxlarge(lex: &mut Lexer<Token>) -> Result<InstructionType, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_inst: &str = &slice.substring(slice.len() - 6, slice.len()).to_lowercase();
-
-    match poss_inst {
-        "pushif" => Ok(InstructionType::PushIntegerFlags),
-        "pullif" => Ok(InstructionType::PullIntegerFlags),
-        "testif" => Ok(InstructionType::TestIntegerFlag),
-        _ => Err(())
-    }
-}
-
-fn directive(lex: &mut Lexer<Token>) -> Result<DirectiveType, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_dir: &str = &slice.substring(slice.len() - 4, slice.len()).to_lowercase();
-
-    if poss_dir == ".org" {
-        Ok(DirectiveType::SetOrigin)
-    } else if poss_dir == ".sym" {
-        Ok(DirectiveType::MakeSymbol)
-    } else if poss_dir == ".vec" {
-        Ok(DirectiveType::PlaceVector)
-    } else if poss_dir == ".str" {
-        Ok(DirectiveType::PlaceString)
-    } else if poss_dir == ".asm" {
-        Ok(DirectiveType::ImportAssembly)
-    } else if poss_dir == ".bin" {
-        Ok(DirectiveType::ImportBinary)
-    } else {
-        Err(())
-    }
-}
-
-fn directive_large(lex: &mut Lexer<Token>) -> Result<DirectiveType, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_dir: &str = &slice.substring(slice.len() - 5, slice.len()).to_lowercase();
-
-    if poss_dir == ".byte" {
-        Ok(DirectiveType::PlaceByte)
-    } else if poss_dir == ".word" {
-        Ok(DirectiveType::PlaceByte)
-    } else if poss_dir == ".strz" {
-        Ok(DirectiveType::PlaceStringNullTerminated)
-    } else {
-        Err(())
-    }
-}
-
-fn addr_abs_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 8, slice.len()), 10);
-
-    match poss_addr {
-        Ok(t) => {
-            if t > 16777215 || t < 0 {
-                Err(())
-            } else {
-                Ok(AddressInfo { addr_type: AddressType::Absolute, base: NumBase::Decimal, val: t })
-            }
-        },
-        Err(_e) => Err(())
-    }
-}
-
-fn addr_port_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 6, slice.len() - 1), 10);
-
-    match poss_addr {
-        Ok(t) => {
-            if t > 65535 || t < 0 {
-                Err(())
-            } else {
-                Ok(AddressInfo { addr_type: AddressType::Port, base: NumBase::Decimal, val: t })
-            }
-        },
-        Err(_e) => Err(())
-    }
-}
-
-fn addr_zero_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 5, slice.len()), 10);
-
-    match poss_addr {
-        Ok(t) => {
-            if t > 65535 || t < 0 {
-                Err(())
-            } else {
-                Ok(AddressInfo { addr_type: AddressType::ZeroBank, base: NumBase::Decimal, val: t })
-            }
-        },
-        Err(_e) => Err(())
-    }
-}
-
-fn addr_dp_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 3, slice.len()), 10);
-
-    match poss_addr {
-        Ok(t) => {
-            if t > 255 || t < 0 {
-                Err(())
-            } else {
-                Ok(AddressInfo { addr_type: AddressType::DirectPage, base: NumBase::Decimal, val: t })
-            }
-        },
-        Err(_e) => Err(())
-    }
-}
-
-fn addr_ipr_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&*format!("{}{}", &slice.substring(slice.len() - 6, slice.len() - 6), &slice.substring(slice.len() - 5, slice.len())), 10);
-
-    match poss_addr {
-        Ok(t) => {
-            if t > 32767 || t < -32768 {
-                Err(())
-            } else {
-                Ok(AddressInfo { addr_type: AddressType::InstructionPtrRelative, base: NumBase::Decimal, val: t })
-            }
-        },
-        Err(_e) => Err(())
-    }
-}
-
-fn addr_spr_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&*format!("{}{}", &slice.substring(slice.len() - 6, slice.len() - 6), &slice.substring(slice.len() - 5, slice.len())), 10);
-
-    match poss_addr {
-        Ok(t) => {
-            if t > 32767 || t < -32768 {
-                Err(())
-            } else {
-                Ok(AddressInfo { addr_type: AddressType::StackPtrRelative, base: NumBase::Decimal, val: t })
-            }
-        },
-        Err(_e) => Err(())
-    }
-}
-
-fn addr_ind_dec(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 9, slice.len() - 1), 10);
-
-    match poss_addr {
-        Ok(t) => {
-            if t > 16777215 || t < 0 {
-                Err(())
-            } else {
-                Ok(AddressInfo { addr_type: AddressType::Indirect, base: NumBase::Decimal, val: t })
-            }
-        },
-        Err(_e) => Err(())
-    }
-}
-
-fn addr_abs_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 6, slice.len()), 16);
-
-    match poss_addr {
-        Ok(t) => {
-            if t > 16777215 || t < 0 {
-                Err(())
-            } else {
-                Ok(AddressInfo { addr_type: AddressType::Absolute, base: NumBase::Hexadecimal, val: t })
-            }
-        },
-        Err(_e) => Err(())
-    }
-}
-
-fn addr_port_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 5, slice.len() - 1), 16);
-
-    match poss_addr {
-        Ok(t) => {
-            if t > 65535 || t < 0 {
-                Err(())
-            } else {
-                Ok(AddressInfo { addr_type: AddressType::Port, base: NumBase::Hexadecimal, val: t })
-            }
-        },
-        Err(_e) => Err(())
-    }
-}
-
-fn addr_zero_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 4, slice.len()), 16);
-
-    match poss_addr {
-        Ok(t) => {
-            if t > 65535 || t < 0 {
-                Err(())
-            } else {
-                Ok(AddressInfo { addr_type: AddressType::ZeroBank, base: NumBase::Hexadecimal, val: t })
-            }
-        },
-        Err(_e) => Err(())
-    }
-}
-
-fn addr_dp_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 2, slice.len()), 16);
-
-    match poss_addr {
-        Ok(t) => {
-            if t > 255 || t < 0 {
-                Err(())
-            } else {
-                Ok(AddressInfo { addr_type: AddressType::DirectPage, base: NumBase::Hexadecimal, val: t })
-            }
-        },
-        Err(_e) => Err(())
-    }
-}
-
-fn addr_ipr_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&*format!("{}{}", &slice.substring(slice.len() - 6, slice.len() - 6), &slice.substring(slice.len() - 5, slice.len())), 16);
-
-    match poss_addr {
-        Ok(t) => {
-            if t > 32767 || t < -32768 {
-                Err(())
-            } else {
-                Ok(AddressInfo { addr_type: AddressType::InstructionPtrRelative, base: NumBase::Hexadecimal, val: t })
-            }
-        },
-        Err(_e) => Err(())
-    }
-}
-
-fn addr_spr_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&*format!("{}{}", &slice.substring(slice.len() - 6, slice.len() - 6), &slice.substring(slice.len() - 5, slice.len())), 16);
-
-    match poss_addr {
-        Ok(t) => {
-            if t > 32767 || t < -32768 {
-                Err(())
-            } else {
-                Ok(AddressInfo { addr_type: AddressType::StackPtrRelative, base: NumBase::Hexadecimal, val: t })
-            }
-        },
-        Err(_e) => Err(())
-    }
-}
-
-fn addr_ind_hex(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 7, slice.len() - 1), 16);
-
-    match poss_addr {
-        Ok(t) => {
-            if t > 16777215 || t < 0 {
-                Err(())
-            } else {
-                Ok(AddressInfo { addr_type: AddressType::Indirect, base: NumBase::Hexadecimal, val: t })
-            }
-        },
-        Err(_e) => Err(())
-    }
-}
-
-fn addr_abs_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 24, slice.len()), 2);
-
-    match poss_addr {
-        Ok(t) => {
-            if t > 16777215 || t < 0 {
-                Err(())
-            } else {
-                Ok(AddressInfo { addr_type: AddressType::Absolute, base: NumBase::Binary, val: t })
-            }
-        },
-        Err(_e) => Err(())
-    }
-}
-
-fn addr_port_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 17, slice.len() - 1), 2);
-
-    match poss_addr {
-        Ok(t) => {
-            if t > 65535 || t < 0 {
-                Err(())
-            } else {
-                Ok(AddressInfo { addr_type: AddressType::Port, base: NumBase::Binary, val: t })
-            }
-        },
-        Err(_e) => Err(())
-    }
-}
-
-fn addr_zero_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 16, slice.len()), 2);
-
-    match poss_addr {
-        Ok(t) => {
-            if t > 65535 || t < 0 {
-                Err(())
-            } else {
-                Ok(AddressInfo { addr_type: AddressType::ZeroBank, base: NumBase::Binary, val: t })
-            }
-        },
-        Err(_e) => Err(())
-    }
-}
-
-fn addr_dp_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 8, slice.len()), 2);
-
-    match poss_addr {
-        Ok(t) => {
-            if t > 255 || t < 0 {
-                Err(())
-            } else {
-                Ok(AddressInfo { addr_type: AddressType::DirectPage, base: NumBase::Binary, val: t })
-            }
-        },
-        Err(_e) => Err(())
-    }
-}
-
-fn addr_ipr_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&*format!("{}{}", &slice.substring(slice.len() - 18, slice.len() - 18), &slice.substring(slice.len() - 16, slice.len())), 2);
-
-    match poss_addr {
-        Ok(t) => {
-            if t > 32767 || t < -32768 {
-                Err(())
-            } else {
-                Ok(AddressInfo { addr_type: AddressType::InstructionPtrRelative, base: NumBase::Binary, val: t })
-            }
-        },
-        Err(_e) => Err(())
-    }
-}
-
-fn addr_spr_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&*format!("{}{}", &slice.substring(slice.len() - 18, slice.len() - 18), &slice.substring(slice.len() - 16, slice.len())), 2);
-
-    match poss_addr {
-        Ok(t) => {
-            if t > 32767 || t < -32768 {
-                Err(())
-            } else {
-                Ok(AddressInfo { addr_type: AddressType::StackPtrRelative, base: NumBase::Binary, val: t })
-            }
-        },
-        Err(_e) => Err(())
-    }
-}
-
-fn addr_ind_bin(lex: &mut Lexer<Token>) -> Result<AddressInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_addr: Result<i32, ParseIntError> = i32::from_str_radix(&slice.substring(slice.len() - 25, slice.len() - 1), 2);
-
-    match poss_addr {
-        Ok(t) => {
-            if t > 16777215 || t < 0 {
-                Err(())
-            } else {
-                Ok(AddressInfo { addr_type: AddressType::Indirect, base: NumBase::Binary, val: t })
-            }
-        },
-        Err(_e) => Err(())
-    }
-}
-
-fn imm_dec(lex: &mut Lexer<Token>) -> Result<ImmediateInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_imm: Result<u16, ParseIntError> = u16::from_str_radix(&slice.substring(slice.len() - 5, slice.len()), 10);
-
-    match poss_imm {
-        Ok(t) => Ok(ImmediateInfo { base: NumBase::Decimal, val: t}),
-        Err(_e) => Err(())
-    }
-}
-
-fn small_imm_dec(lex: &mut Lexer<Token>) -> Result<ImmediateInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_imm: Result<u16, ParseIntError> = u16::from_str_radix(&slice.substring(slice.len() - 3, slice.len()), 10);
-
-    match poss_imm {
-        Ok(t) => {
-            if t > 255 {
-                Err(())
-            } else {
-                Ok(ImmediateInfo { base: NumBase::Decimal, val: t })
-            }
-        },
-        Err(_e) => Err(())
-    }
-}
-
-fn imm_hex(lex: &mut Lexer<Token>) -> Result<ImmediateInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_imm: Result<u16, ParseIntError> = u16::from_str_radix(&slice.substring(slice.len() - 4, slice.len()), 16);
-
-    match poss_imm {
-        Ok(t) => Ok(ImmediateInfo { base: NumBase::Hexadecimal, val: t}),
-        Err(_e) => Err(())
-    }
-}
-
-fn small_imm_hex(lex: &mut Lexer<Token>) -> Result<ImmediateInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_imm: Result<u16, ParseIntError> = u16::from_str_radix(&slice.substring(slice.len() - 2, slice.len()), 16);
-
-    match poss_imm {
-        Ok(t) => {
-            if t > 255 {
-                Err(())
-            } else {
-                Ok(ImmediateInfo { base: NumBase::Hexadecimal, val: t })
-            }
-        },
-        Err(_e) => Err(())
-    }
-}
-
-fn imm_bin(lex: &mut Lexer<Token>) -> Result<ImmediateInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_imm: Result<u16, ParseIntError> = u16::from_str_radix(&slice.substring(slice.len() - 16, slice.len()), 2);
-
-    match poss_imm {
-        Ok(t) => Ok(ImmediateInfo { base: NumBase::Binary, val: t}),
-        Err(_e) => Err(())
-    }
-}
-
-fn small_imm_bin(lex: &mut Lexer<Token>) -> Result<ImmediateInfo, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_imm: Result<u16, ParseIntError> = u16::from_str_radix(&slice.substring(slice.len() - 8, slice.len()), 2);
-
-    match poss_imm {
-        Ok(t) => {
-            if t > 255 {
-                Err(())
-            } else {
-                Ok(ImmediateInfo { base: NumBase::Binary, val: t })
-            }
-        },
-        Err(_e) => Err(())
-    }
-}
-
-fn string(lex: &mut Lexer<Token>) -> Result<Vec<u8>, ()> {
-    let slice: &str = lex.slice();
-
-    let string: &str = slice.substring(1, slice.len() - 1);
-    let mut charvec: Vec<u8> = Vec::new();
-    let mut err_count: u8 = 0;
-
-    // TODO: Figure out a way to detect escape sequences and replace them with a single character.
-    // TODO: Also, how to extended ascii
-
-    for char in string.chars() {
-        match char {
-            '\x00' => charvec.push(0),
-            '\x01' => charvec.push(1),
-            '\x02' => charvec.push(2),
-            '\x03' => charvec.push(3),
-            '\x04' => charvec.push(4),
-            '\x05' => charvec.push(5),
-            '\x06' => charvec.push(6),
-            '\x07' => charvec.push(7),
-            '\x08' => charvec.push(8),
-            '\x09' => charvec.push(9),
-            '\x0A' => charvec.push(10),
-            '\x0B' => charvec.push(11),
-            '\x0C' => charvec.push(12),
-            '\x0D' => charvec.push(13),
-            '\x0E' => charvec.push(14),
-            '\x0F' => charvec.push(15),
-            '\x10' => charvec.push(16),
-            '\x11' => charvec.push(17),
-            '\x12' => charvec.push(18),
-            '\x13' => charvec.push(19),
-            '\x14' => charvec.push(20),
-            '\x15' => charvec.push(21),
-            '\x16' => charvec.push(22),
-            '\x17' => charvec.push(23),
-            '\x18' => charvec.push(24),
-            '\x19' => charvec.push(25),
-            '\x1A' => charvec.push(26),
-            '\x1B' => charvec.push(27),
-            '\x1C' => charvec.push(28),
-            '\x1D' => charvec.push(29),
-            '\x1E' => charvec.push(30),
-            '\x1F' => charvec.push(31),
-            '\x20' => charvec.push(32),
-            '\x21' => charvec.push(33),
-            '\x22' => charvec.push(34),
-            '\x23' => charvec.push(35),
-            '\x24' => charvec.push(36),
-            '\x25' => charvec.push(37),
-            '\x26' => charvec.push(38),
-            '\x27' => charvec.push(39),
-            '\x28' => charvec.push(40),
-            '\x29' => charvec.push(41),
-            '\x2A' => charvec.push(42),
-            '\x2B' => charvec.push(43),
-            '\x2C' => charvec.push(44),
-            '\x2D' => charvec.push(45),
-            '\x2E' => charvec.push(46),
-            '\x2F' => charvec.push(47),
-            '\x30' => charvec.push(48),
-            '\x31' => charvec.push(49),
-            '\x32' => charvec.push(50),
-            '\x33' => charvec.push(51),
-            '\x34' => charvec.push(52),
-            '\x35' => charvec.push(53),
-            '\x36' => charvec.push(54),
-            '\x37' => charvec.push(55),
-            '\x38' => charvec.push(56),
-            '\x39' => charvec.push(57),
-            '\x3A' => charvec.push(58),
-            '\x3B' => charvec.push(59),
-            '\x3C' => charvec.push(60),
-            '\x3D' => charvec.push(61),
-            '\x3E' => charvec.push(62),
-            '\x3F' => charvec.push(63),
-            '\x40' => charvec.push(64),
-            '\x41' => charvec.push(65),
-            '\x42' => charvec.push(66),
-            '\x43' => charvec.push(67),
-            '\x44' => charvec.push(68),
-            '\x45' => charvec.push(69),
-            '\x46' => charvec.push(70),
-            '\x47' => charvec.push(71),
-            '\x48' => charvec.push(72),
-            '\x49' => charvec.push(73),
-            '\x4A' => charvec.push(74),
-            '\x4B' => charvec.push(75),
-            '\x4C' => charvec.push(76),
-            '\x4D' => charvec.push(77),
-            '\x4E' => charvec.push(78),
-            '\x4F' => charvec.push(79),
-            '\x50' => charvec.push(80),
-            '\x51' => charvec.push(81),
-            '\x52' => charvec.push(82),
-            '\x53' => charvec.push(83),
-            '\x54' => charvec.push(84),
-            '\x55' => charvec.push(85),
-            '\x56' => charvec.push(86),
-            '\x57' => charvec.push(87),
-            '\x58' => charvec.push(88),
-            '\x59' => charvec.push(89),
-            '\x5A' => charvec.push(90),
-            '\x5B' => charvec.push(91),
-            '\x5C' => charvec.push(92),
-            '\x5D' => charvec.push(93),
-            '\x5E' => charvec.push(94),
-            '\x5F' => charvec.push(95),
-            '\x60' => charvec.push(96),
-            '\x61' => charvec.push(97),
-            '\x62' => charvec.push(98),
-            '\x63' => charvec.push(99),
-            '\x64' => charvec.push(100),
-            '\x65' => charvec.push(101),
-            '\x66' => charvec.push(102),
-            '\x67' => charvec.push(103),
-            '\x68' => charvec.push(104),
-            '\x69' => charvec.push(105),
-            '\x6A' => charvec.push(106),
-            '\x6B' => charvec.push(107),
-            '\x6C' => charvec.push(108),
-            '\x6D' => charvec.push(109),
-            '\x6E' => charvec.push(110),
-            '\x6F' => charvec.push(111),
-            '\x70' => charvec.push(112),
-            '\x71' => charvec.push(113),
-            '\x72' => charvec.push(114),
-            '\x73' => charvec.push(115),
-            '\x74' => charvec.push(116),
-            '\x75' => charvec.push(117),
-            '\x76' => charvec.push(118),
-            '\x77' => charvec.push(119),
-            '\x78' => charvec.push(120),
-            '\x79' => charvec.push(121),
-            '\x7A' => charvec.push(122),
-            '\x7B' => charvec.push(123),
-            '\x7C' => charvec.push(124),
-            '\x7D' => charvec.push(125),
-            '\x7E' => charvec.push(126),
-            '\x7F' => charvec.push(127),
-            _ => err_count += 1
-        };
-    }
-
-    if err_count == 0 {
-        Ok(charvec)
-    } else {
-        Err(())
-    }
-}
-
-fn char(lex: &mut Lexer<Token>) -> Result<u8, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_char: &str = &slice.substring(slice.len() - 1, slice.len() - 1);
-
-    // Welcome to hell.
-
-    match poss_char {
-        "\x00" => Ok(0),
-        "\x01" => Ok(1),
-        "\x02" => Ok(2),
-        "\x03" => Ok(3),
-        "\x04" => Ok(4),
-        "\x05" => Ok(5),
-        "\x06" => Ok(6),
-        "\x07" => Ok(7),
-        "\x08" => Ok(8),
-        "\x09" => Ok(9),
-        "\x0A" => Ok(10),
-        "\x0B" => Ok(11),
-        "\x0C" => Ok(12),
-        "\x0D" => Ok(13),
-        "\x0E" => Ok(14),
-        "\x0F" => Ok(15),
-        "\x10" => Ok(16),
-        "\x11" => Ok(17),
-        "\x12" => Ok(18),
-        "\x13" => Ok(19),
-        "\x14" => Ok(20),
-        "\x15" => Ok(21),
-        "\x16" => Ok(22),
-        "\x17" => Ok(23),
-        "\x18" => Ok(24),
-        "\x19" => Ok(25),
-        "\x1A" => Ok(26),
-        "\x1B" => Ok(27),
-        "\x1C" => Ok(28),
-        "\x1D" => Ok(29),
-        "\x1E" => Ok(30),
-        "\x1F" => Ok(31),
-        "\x20" => Ok(32),
-        "\x21" => Ok(33),
-        "\x22" => Ok(34),
-        "\x23" => Ok(35),
-        "\x24" => Ok(36),
-        "\x25" => Ok(37),
-        "\x26" => Ok(38),
-        "\x27" => Ok(39),
-        "\x28" => Ok(40),
-        "\x29" => Ok(41),
-        "\x2A" => Ok(42),
-        "\x2B" => Ok(43),
-        "\x2C" => Ok(44),
-        "\x2D" => Ok(45),
-        "\x2E" => Ok(46),
-        "\x2F" => Ok(47),
-        "\x30" => Ok(48),
-        "\x31" => Ok(49),
-        "\x32" => Ok(50),
-        "\x33" => Ok(51),
-        "\x34" => Ok(52),
-        "\x35" => Ok(53),
-        "\x36" => Ok(54),
-        "\x37" => Ok(55),
-        "\x38" => Ok(56),
-        "\x39" => Ok(57),
-        "\x3A" => Ok(58),
-        "\x3B" => Ok(59),
-        "\x3C" => Ok(60),
-        "\x3D" => Ok(61),
-        "\x3E" => Ok(62),
-        "\x3F" => Ok(63),
-        "\x40" => Ok(64),
-        "\x41" => Ok(65),
-        "\x42" => Ok(66),
-        "\x43" => Ok(67),
-        "\x44" => Ok(68),
-        "\x45" => Ok(69),
-        "\x46" => Ok(70),
-        "\x47" => Ok(71),
-        "\x48" => Ok(72),
-        "\x49" => Ok(73),
-        "\x4A" => Ok(74),
-        "\x4B" => Ok(75),
-        "\x4C" => Ok(76),
-        "\x4D" => Ok(77),
-        "\x4E" => Ok(78),
-        "\x4F" => Ok(79),
-        "\x50" => Ok(80),
-        "\x51" => Ok(81),
-        "\x52" => Ok(82),
-        "\x53" => Ok(83),
-        "\x54" => Ok(84),
-        "\x55" => Ok(85),
-        "\x56" => Ok(86),
-        "\x57" => Ok(87),
-        "\x58" => Ok(88),
-        "\x59" => Ok(89),
-        "\x5A" => Ok(90),
-        "\x5B" => Ok(91),
-        "\x5C" => Ok(92),
-        "\x5D" => Ok(93),
-        "\x5E" => Ok(94),
-        "\x5F" => Ok(95),
-        "\x60" => Ok(96),
-        "\x61" => Ok(97),
-        "\x62" => Ok(98),
-        "\x63" => Ok(99),
-        "\x64" => Ok(100),
-        "\x65" => Ok(101),
-        "\x66" => Ok(102),
-        "\x67" => Ok(103),
-        "\x68" => Ok(104),
-        "\x69" => Ok(105),
-        "\x6A" => Ok(106),
-        "\x6B" => Ok(107),
-        "\x6C" => Ok(108),
-        "\x6D" => Ok(109),
-        "\x6E" => Ok(110),
-        "\x6F" => Ok(111),
-        "\x70" => Ok(112),
-        "\x71" => Ok(113),
-        "\x72" => Ok(114),
-        "\x73" => Ok(115),
-        "\x74" => Ok(116),
-        "\x75" => Ok(117),
-        "\x76" => Ok(118),
-        "\x77" => Ok(119),
-        "\x78" => Ok(120),
-        "\x79" => Ok(121),
-        "\x7A" => Ok(122),
-        "\x7B" => Ok(123),
-        "\x7C" => Ok(124),
-        "\x7D" => Ok(125),
-        "\x7E" => Ok(126),
-        "\x7F" => Ok(127),
-        _ => Err(())
-    }
-}
-
-fn char_esc(lex: &mut Lexer<Token>) -> Result<u8, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_char: &str = &slice.substring(slice.len() - 2, slice.len() - 1);
-
-    match poss_char {
-        "\\\\" => Ok(92),
-        "\\a" => Ok(7),
-        "\\b" => Ok(8),
-        "\\f" => Ok(12),
-        "\\n" => Ok(10),
-        "\\r" => Ok(13),
-        "\\t" => Ok(9),
-        "\\v" => Ok(11),
-        _ => Err(())
-    }
-}
-
-fn char_esc_hex(lex: &mut Lexer<Token>) -> Result<u8, ()> {
-    let slice: &str = lex.slice();
-
-    let poss_char: &str = &slice.substring(slice.len() - 4, slice.len() - 1);
-
-    // Welcome to hell 2: electric boogaloo
-
-    match poss_char {
-        "\\x00" => Ok(0),
-        "\\x01" => Ok(1),
-        "\\x02" => Ok(2),
-        "\\x03" => Ok(3),
-        "\\x04" => Ok(4),
-        "\\x05" => Ok(5),
-        "\\x06" => Ok(6),
-        "\\x07" => Ok(7),
-        "\\x08" => Ok(8),
-        "\\x09" => Ok(9),
-        "\\x0A" => Ok(10),
-        "\\x0B" => Ok(11),
-        "\\x0C" => Ok(12),
-        "\\x0D" => Ok(13),
-        "\\x0E" => Ok(14),
-        "\\x0F" => Ok(15),
-        "\\x10" => Ok(16),
-        "\\x11" => Ok(17),
-        "\\x12" => Ok(18),
-        "\\x13" => Ok(19),
-        "\\x14" => Ok(20),
-        "\\x15" => Ok(21),
-        "\\x16" => Ok(22),
-        "\\x17" => Ok(23),
-        "\\x18" => Ok(24),
-        "\\x19" => Ok(25),
-        "\\x1A" => Ok(26),
-        "\\x1B" => Ok(27),
-        "\\x1C" => Ok(28),
-        "\\x1D" => Ok(29),
-        "\\x1E" => Ok(30),
-        "\\x1F" => Ok(31),
-        "\\x20" => Ok(32),
-        "\\x21" => Ok(33),
-        "\\x22" => Ok(34),
-        "\\x23" => Ok(35),
-        "\\x24" => Ok(36),
-        "\\x25" => Ok(37),
-        "\\x26" => Ok(38),
-        "\\x27" => Ok(39),
-        "\\x28" => Ok(40),
-        "\\x29" => Ok(41),
-        "\\x2A" => Ok(42),
-        "\\x2B" => Ok(43),
-        "\\x2C" => Ok(44),
-        "\\x2D" => Ok(45),
-        "\\x2E" => Ok(46),
-        "\\x2F" => Ok(47),
-        "\\x30" => Ok(48),
-        "\\x31" => Ok(49),
-        "\\x32" => Ok(50),
-        "\\x33" => Ok(51),
-        "\\x34" => Ok(52),
-        "\\x35" => Ok(53),
-        "\\x36" => Ok(54),
-        "\\x37" => Ok(55),
-        "\\x38" => Ok(56),
-        "\\x39" => Ok(57),
-        "\\x3A" => Ok(58),
-        "\\x3B" => Ok(59),
-        "\\x3C" => Ok(60),
-        "\\x3D" => Ok(61),
-        "\\x3E" => Ok(62),
-        "\\x3F" => Ok(63),
-        "\\x40" => Ok(64),
-        "\\x41" => Ok(65),
-        "\\x42" => Ok(66),
-        "\\x43" => Ok(67),
-        "\\x44" => Ok(68),
-        "\\x45" => Ok(69),
-        "\\x46" => Ok(70),
-        "\\x47" => Ok(71),
-        "\\x48" => Ok(72),
-        "\\x49" => Ok(73),
-        "\\x4A" => Ok(74),
-        "\\x4B" => Ok(75),
-        "\\x4C" => Ok(76),
-        "\\x4D" => Ok(77),
-        "\\x4E" => Ok(78),
-        "\\x4F" => Ok(79),
-        "\\x50" => Ok(80),
-        "\\x51" => Ok(81),
-        "\\x52" => Ok(82),
-        "\\x53" => Ok(83),
-        "\\x54" => Ok(84),
-        "\\x55" => Ok(85),
-        "\\x56" => Ok(86),
-        "\\x57" => Ok(87),
-        "\\x58" => Ok(88),
-        "\\x59" => Ok(89),
-        "\\x5A" => Ok(90),
-        "\\x5B" => Ok(91),
-        "\\x5C" => Ok(92),
-        "\\x5D" => Ok(93),
-        "\\x5E" => Ok(94),
-        "\\x5F" => Ok(95),
-        "\\x60" => Ok(96),
-        "\\x61" => Ok(97),
-        "\\x62" => Ok(98),
-        "\\x63" => Ok(99),
-        "\\x64" => Ok(100),
-        "\\x65" => Ok(101),
-        "\\x66" => Ok(102),
-        "\\x67" => Ok(103),
-        "\\x68" => Ok(104),
-        "\\x69" => Ok(105),
-        "\\x6A" => Ok(106),
-        "\\x6B" => Ok(107),
-        "\\x6C" => Ok(108),
-        "\\x6D" => Ok(109),
-        "\\x6E" => Ok(110),
-        "\\x6F" => Ok(111),
-        "\\x70" => Ok(112),
-        "\\x71" => Ok(113),
-        "\\x72" => Ok(114),
-        "\\x73" => Ok(115),
-        "\\x74" => Ok(116),
-        "\\x75" => Ok(117),
-        "\\x76" => Ok(118),
-        "\\x77" => Ok(119),
-        "\\x78" => Ok(120),
-        "\\x79" => Ok(121),
-        "\\x7A" => Ok(122),
-        "\\x7B" => Ok(123),
-        "\\x7C" => Ok(124),
-        "\\x7D" => Ok(125),
-        "\\x7E" => Ok(126),
-        "\\x7F" => Ok(127),
-        "\\x80" => Ok(128),
-        "\\x81" => Ok(129),
-        "\\x82" => Ok(130),
-        "\\x83" => Ok(131),
-        "\\x84" => Ok(132),
-        "\\x85" => Ok(133),
-        "\\x86" => Ok(134),
-        "\\x87" => Ok(135),
-        "\\x88" => Ok(136),
-        "\\x89" => Ok(137),
-        "\\x8A" => Ok(138),
-        "\\x8B" => Ok(139),
-        "\\x8C" => Ok(140),
-        "\\x8D" => Ok(141),
-        "\\x8E" => Ok(142),
-        "\\x8F" => Ok(143),
-        "\\x90" => Ok(144),
-        "\\x91" => Ok(145),
-        "\\x92" => Ok(146),
-        "\\x93" => Ok(147),
-        "\\x94" => Ok(148),
-        "\\x95" => Ok(149),
-        "\\x96" => Ok(150),
-        "\\x97" => Ok(151),
-        "\\x98" => Ok(152),
-        "\\x99" => Ok(153),
-        "\\x9A" => Ok(154),
-        "\\x9B" => Ok(155),
-        "\\x9C" => Ok(156),
-        "\\x9D" => Ok(157),
-        "\\x9E" => Ok(158),
-        "\\x9F" => Ok(159),
-        "\\xA0" => Ok(160),
-        "\\xA1" => Ok(161),
-        "\\xA2" => Ok(162),
-        "\\xA3" => Ok(163),
-        "\\xA4" => Ok(164),
-        "\\xA5" => Ok(165),
-        "\\xA6" => Ok(166),
-        "\\xA7" => Ok(167),
-        "\\xA8" => Ok(168),
-        "\\xA9" => Ok(169),
-        "\\xAA" => Ok(170),
-        "\\xAB" => Ok(171),
-        "\\xAC" => Ok(172),
-        "\\xAD" => Ok(173),
-        "\\xAE" => Ok(174),
-        "\\xAF" => Ok(175),
-        "\\xB0" => Ok(176),
-        "\\xB1" => Ok(177),
-        "\\xB2" => Ok(178),
-        "\\xB3" => Ok(179),
-        "\\xB4" => Ok(180),
-        "\\xB5" => Ok(181),
-        "\\xB6" => Ok(182),
-        "\\xB7" => Ok(183),
-        "\\xB8" => Ok(184),
-        "\\xB9" => Ok(185),
-        "\\xBA" => Ok(186),
-        "\\xBB" => Ok(187),
-        "\\xBC" => Ok(188),
-        "\\xBD" => Ok(189),
-        "\\xBE" => Ok(190),
-        "\\xBF" => Ok(191),
-        "\\xC0" => Ok(192),
-        "\\xC1" => Ok(193),
-        "\\xC2" => Ok(194),
-        "\\xC3" => Ok(195),
-        "\\xC4" => Ok(196),
-        "\\xC5" => Ok(197),
-        "\\xC6" => Ok(198),
-        "\\xC7" => Ok(199),
-        "\\xC8" => Ok(200),
-        "\\xC9" => Ok(201),
-        "\\xCA" => Ok(202),
-        "\\xCB" => Ok(203),
-        "\\xCC" => Ok(204),
-        "\\xCD" => Ok(205),
-        "\\xCE" => Ok(206),
-        "\\xCF" => Ok(207),
-        "\\xD0" => Ok(208),
-        "\\xD1" => Ok(209),
-        "\\xD2" => Ok(210),
-        "\\xD3" => Ok(211),
-        "\\xD4" => Ok(212),
-        "\\xD5" => Ok(213),
-        "\\xD6" => Ok(214),
-        "\\xD7" => Ok(215),
-        "\\xD8" => Ok(216),
-        "\\xD9" => Ok(217),
-        "\\xDA" => Ok(218),
-        "\\xDB" => Ok(219),
-        "\\xDC" => Ok(220),
-        "\\xDD" => Ok(221),
-        "\\xDE" => Ok(222),
-        "\\xDF" => Ok(223),
-        "\\xE0" => Ok(224),
-        "\\xE1" => Ok(225),
-        "\\xE2" => Ok(226),
-        "\\xE3" => Ok(227),
-        "\\xE4" => Ok(228),
-        "\\xE5" => Ok(229),
-        "\\xE6" => Ok(230),
-        "\\xE7" => Ok(231),
-        "\\xE8" => Ok(232),
-        "\\xE9" => Ok(233),
-        "\\xEA" => Ok(234),
-        "\\xEB" => Ok(235),
-        "\\xEC" => Ok(236),
-        "\\xED" => Ok(237),
-        "\\xEE" => Ok(238),
-        "\\xEF" => Ok(239),
-        "\\xF0" => Ok(240),
-        "\\xF1" => Ok(241),
-        "\\xF2" => Ok(242),
-        "\\xF3" => Ok(243),
-        "\\xF4" => Ok(244),
-        "\\xF5" => Ok(245),
-        "\\xF6" => Ok(246),
-        "\\xF7" => Ok(247),
-        "\\xF8" => Ok(248),
-        "\\xF9" => Ok(249),
-        "\\xFA" => Ok(250),
-        "\\xFB" => Ok(251),
-        "\\xFC" => Ok(252),
-        "\\xFD" => Ok(253),
-        "\\xFE" => Ok(254),
-        "\\xFF" => Ok(255),
-        _ => Err(())
-    }
-}
-
-#[derive(Logos, Debug, Serialize, Deserialize)]
+#[derive(Logos, Clone)]
+#[logos(subpattern bin = r"[01][_01]*")]
+#[logos(subpattern dec = r"[0-9][_0-9]*")]
+#[logos(subpattern hex = r"[0-9a-fA-F][_0-9a-fA-F]*")]
 pub enum Token {
-    #[regex(r";[^\r\n]*(\r\n|\n)?", logos::skip)]
-    #[regex(r"[ \t\n\f]+", logos::skip)]
-    #[error]
-    Error,
+	#[regex(r"#(?&dec)", Const::dec)]
+	#[regex(r"#%(?&bin)", Const::bin)]
+	#[regex(r"#\$(?&hex)", Const::hex)]
+	#[regex(r"'[\x00-\x7F]*'", Const::character)]
+	#[regex(r#""(?:[^"]|\\")*""#, Const::string)]
+	Constant(Const),
 
-    #[regex(r"'[\x00-\x7F]'", char)]
-    #[regex(r"'\[0-9a-zA-Z]'", char_esc)]
-    #[regex(r"'\\x[0-9a-fA-F][0-9a-fA-F]'", char_esc_hex)]
-    Char(u8),
+	#[regex(r"(?&dec)", Addr::dec)]
+	#[regex(r"%(?&bin)", Addr::bin)]
+	#[regex(r"\$(?&hex)", Addr::hex)]
+	#[regex(r"(?&dec)d", Addr::dec)]
+	#[regex(r"(?&dec)p", Addr::dec)]
+	#[regex(r"%(?&bin)p", Addr::bin)]
+	#[regex(r"\$(?&hex)p", Addr::hex)]
+	#[regex(r"\((?&dec)\)", Addr::dec)]
+	#[regex(r"\(%(?&bin)\)", Addr::bin)]
+	#[regex(r"\(\$(?&hex)\)", Addr::hex)]
+	#[regex(r"IP[+-](?&dec)", Addr::dec)]
+	#[regex(r"IP[+-]%(?&bin)", Addr::bin)]
+	#[regex(r"IP[+-]\$(?&hex)", Addr::hex)]
+	#[regex(r"SP[+-](?&dec)", Addr::dec)]
+	#[regex(r"SP[+-]%(?&bin)", Addr::bin)]
+	#[regex(r"SP[+-]\$(?&hex)", Addr::hex)]
+	Address(Addr),
 
-    #[regex(r#""[\x00-\xFF]+""#, string)]
-    String(Vec<u8>),
+	#[regex(r#"p"(?:[^"]|\\")*""#, Token::path)]
+	Path(PathBuf),
 
-    #[regex(r"#[0-6][0-9][0-9][0-9][0-9]", imm_dec)]
-    #[regex(r"#[0-2][0-9][0-9]", small_imm_dec)]
-    #[regex(r"#\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]", imm_hex)]
-    #[regex(r"#\$[0-9a-fA-F][0-9a-fA-F]", small_imm_hex)]
-    #[regex(r"#%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]", imm_bin)]
-    #[regex(r"#%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]", small_imm_bin)]
-    Immediate(ImmediateInfo),
+	#[regex(r".?[a-zA-Z][_0-9a-zA-Z]*\$?", Wrd::new)]
+	Word(Wrd),
 
-    // WELCOME TO THE PAIN TRAIN
+	#[token(":")]
+	Colon,
 
-    #[regex(r"[0-1][0-9][0-9][0-9][0-9][0-9][0-9][0-9]", addr_abs_dec)]
-    #[regex(r"[0-6][0-9][0-9][0-9][0-9]p", addr_port_dec)]
-    #[regex(r"[0-6][0-9][0-9][0-9][0-9]", addr_zero_dec)]
-    #[regex(r"[0-2][0-9][0-9]", addr_dp_dec)]
-    #[regex(r"IP(\+|-)[0-6][0-9][0-9][0-9][0-9]", addr_ipr_dec)]
-    #[regex(r"SP(\+|-)[0-6][0-9][0-9][0-9][0-9]", addr_spr_dec)]
-    #[regex(r"\([0-1][0-9][0-9][0-9][0-9][0-9][0-9][0-9]\)", addr_ind_dec)]
-    #[regex(r"\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]", addr_abs_hex)]
-    #[regex(r"\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]p", addr_port_hex)]
-    #[regex(r"\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]", addr_zero_hex)]
-    #[regex(r"\$[0-9a-fA-F][0-9a-fA-F]", addr_dp_hex)]
-    #[regex(r"IP(\+|-)\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]", addr_ipr_hex)]
-    #[regex(r"SP(\+|-)\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]", addr_spr_hex)]
-    #[regex(r"\(\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]\)", addr_ind_hex)]
-    #[regex(r"%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]", addr_abs_bin)]
-    #[regex(r"%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]p", addr_port_bin)]
-    #[regex(r"%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]", addr_zero_bin)]
-    #[regex(r"%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]", addr_dp_bin)]
-    #[regex(r"IP(\+|-)%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]", addr_ipr_bin)]
-    #[regex(r"SP(\+|-)%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]", addr_spr_bin)]
-    #[regex(r"\(%[0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1][0-1]\)", addr_ind_bin)]
-    Address(AddressInfo),
-
-    // YOU ARE NOW LEAVING THE PAIN TRAIN
-
-    #[regex(r".[a-zA-Z][a-zA-Z][a-zA-Z]", priority=7, callback=directive)]
-    #[regex(r".[a-zA-Z][a-zA-Z][a-zA-Z][a-zA-Z]", priority=8, callback=directive_large)]
-    Directive(DirectiveType),
-
-    #[regex(r"[a-zA-Z][a-zA-Z]", instruction_small)]
-    #[regex(r"[a-zA-Z][a-zA-Z][a-zA-Z]", instruction)]
-    #[regex(r"[a-zA-Z][a-zA-Z][a-zA-Z][a-zA-Z]", instruction_large)]
-    #[regex(r"[a-zA-Z][a-zA-Z][a-zA-Z][a-zA-Z][a-zA-Z]", instruction_xlarge)]
-    #[regex(r"[a-zA-Z][a-zA-Z][a-zA-Z][a-zA-Z][a-zA-Z][a-zA-Z]", instruction_xxlarge)]
-    Instruction(InstructionType),
-
-    #[regex(r"[a-zA-Z_-]+:", label)]
-    #[regex(r"[a-zA-Z_-]+,?", symbol)]
-    Identifier(IdentifierInfo),
-
-    #[regex(r"i[ABXY]", register)]
-    #[regex(r"i[AB][LH]", small_register)]
-    Register(RegisterIdent)
+	Newline,
+	
+	#[regex(r"[ \t\n\r\f]+", logos::skip)]
+	#[regex(r";[^\n]*", logos::skip)]
+	#[error]
+	Error
 }
 
-pub fn tok(f: File, v: bool) -> Result<Vec<Vec<Token>>, Vec<String>> {
-    let mut errs: Vec<String> = Vec::new();
-    let mut toks: Vec<Vec<Token>> = Vec::new();
+#[derive(Clone)]
+pub enum Const {
+	Byte(u8),
+	String(Vec<u8>),
+	Word(u16)
+}
 
-    let lines: Enumerate<Lines<BufReader<File>>> = io::BufReader::new(f).lines().enumerate();
+#[derive(Clone)]
+pub enum Addr {
+	// bool field says whether the address is indirect (true) or direct (false).
+	Absolute(u32, bool),
+	// bool field says whether the address is indirect (true) or direct (false).
+	ZeroBank(u16, bool),
+	Port(u16),
+	DirectPage(u8),
+	PointerRelative(i16, Ptr),
+}
 
-    if v {
-        println!("[INFO] Starting to tokenize source file...");
-    }
+#[derive(Clone)]
+pub enum Ptr {
+	Instruction,
+	Stack
+}
 
-    for line in lines {
-        if let Ok(l) = line.1 {
+#[derive(Clone)]
+pub enum Wrd {
+	NoOperation,
+	MoveToRegister,
+	MoveToMemory,
+	MoveToRegisterX,
+	MoveToRegisterY,
+	MoveToMemoryX,
+	MoveToMemoryY,
+	SetRegisterToZero,
+	SetMemoryToZero,
+	SetMemoryToZeroX,
+	SetMemoryToZeroY,
+	HaltAndCatchFire,
+	TransferRegisterContents,
+	SwapRegisterContents,
+	StoreStackPointerToX,
+	GetStackPointerFromX,
+	SetStackBank,
+	SetDirectPage,
+	PushToStack,
+	PopFromStack,
+	PushIntegerFlagsToStack,
+	PopIntegerFlagsFromStack,
+	And,
+	Or,
+	ExclusiveOr,
+	AddIntegers,
+	AddIntegersWithCarry,
+	SubtractIntegers,
+	SubtractIntegersWithCarry,
+	Not,
+	ShiftLeft,
+	ShiftRight,
+	RotateLeft,
+	RotateRight,
+	PopulationCount,
+	VacancyCount,
+	Swizzle,
+	SetBits,
+	ClearBits,
+	EnableMaskableInterrupts,
+	DisableMaskableInterrupts,
+	SetDecimalFlag,
+	ClearDecimalFlag,
+	SetSignFlag,
+	ClearSignFlag,
+	SetNegativeFlag,
+	ClearNegativeFlag,
+	SetHalfCarryFlag,
+	ClearHalfCarryFlag,
+	SetCarryFlag,
+	ClearCarryFlag,
+	ClearOverflowFlag,
+	SetZeroFlag,
+	ClearZeroFlag,
+	Jump,
+	JumpX,
+	JumpY,
+	CallSubroutine,
+	CompareIntegers,
+	BranchIfEqual,
+	BranchIfNotEqual,
+	BranchIfLessThanUnsigned,
+	BranchIfLessThanSigned,
+	BranchIfGreaterThanUnsigned,
+	BranchIfGreaterThanSigned,
+	BranchIfLessThanOrEqualUnsigned,
+	BranchIfLessThanOrEqualSigned,
+	BranchIfGreaterThanOrEqualUnsigned,
+	BranchIfGreaterThanOrEqualSigned,
+	BranchIfCarrySet,
+	BranchIfCarryClear,
+	BranchIfHalfCarrySet,
+	BranchIfHalfCarryClear,
+	BranchIfOverflowSet,
+	BranchIfOverflowClear,
+	Increment,
+	IncrementXBranchIfNotEqual,
+	IncrementYBranchIfNotEqual,
+	Decrement,
+	DecrementXBranchIfNotZero,
+	DecrementYBranchIfNotZero,
+	TestBits,
+	BranchIfStackFull,
+	BranchIfStackEmpty,
+	BranchDataParity,
+	CallInterrupt,
+	ReturnFromSubroutine,
+	ReturnFromInterrupt,
+	Break,
+	WaitForInterrupt,
+	IntegerRegisterA,
+	IntegerRegisterALow,
+	IntegerRegisterAHigh,
+	IntegerRegisterB,
+	IntegerRegisterBLow,
+	IntegerRegisterBHigh,
+	IntegerRegisterX,
+	IntegerRegisterY,
+	Origin,
+	DefineSymbol,
+	PlaceByte,
+	PlaceWord,
+	PlaceVector,
+	PlaceString,
+	PlaceNullTerminatedString,
+	IncludeSource,
+	IncludeBinary,
+	Identifier(String)
+}
 
-            if v {
-                println!("[INFO] Tokenizing line {}...", line.0);
-            }
+//--> Functions <--
 
-            let mut tok_line_toks: Vec<Token> = Vec::new();
+impl Token {
+	pub fn lex(p: &Path) -> TokenResult {
+		let mut toks = Vec::new();
+		let mut errs = Vec::new();
 
-            let tok_line = Token::lexer(l.as_str()).spanned();
-            for (tok, span) in tok_line {
-                if let Token::Error = tok {
-                    // TODO: Useful error message code. Want errors to be as useful or nearly as useful as rustc errors
-                    if v {
-                        eprintln!("[ERR!] Error on line {}. (byte span: {:?})", line.0, span);
-                        if errs.is_empty() {
-                            errs.push(format!("[ERR!] Error on line {}. (byte span: {:?})", line.0, span));
-                        }
-                    } else {
-                        errs.push(format!("[ERR!] Error on line {}. (byte span: {:?})", line.0, span));
-                    }
-                } else {
+		match File::open(p) {
+			Ok(f) => {
+				for (lno, line) in BufReader::new(f).lines().enumerate() {
+					match line {
+						Ok(l) => {
+							for (tok, span) in Token::lexer(&l).spanned() {
+								match tok {
+									Token::Error => {
+										let span2 = span.clone();
+										// TOOD: Better errors.
+										errs.push(format!("<ERR! {}:{}:{}..{}> '{}' couldn't be tokenized.", p.display(), lno, span.start, span.end, &l[span2]));
+									}
+									_ => toks.push(tok)
+								}
+							}
+							toks.push(Token::Newline);
+						},
+						Err(e) => match e.kind() {
+							ErrorKind::InvalidData => errs.push(format!("")),
+							_ => errs.push(format!(""))
+						}
+					}
+				}
+			},
+			Err(e) => match e.kind() {
+				ErrorKind::NotFound => errs.push(format!("")),
+				ErrorKind::PermissionDenied => errs.push(format!("")),
+				_ => errs.push(format!(""))
+			}
+		}
 
-                    if v {
-                        println!("[INFO] Token {:?} (byte span: {:?}) found.", tok, span);
-                    }
+		if errs.is_empty() {
+			Ok(toks)
+		} else {
+			Err(errs)
+		}
+	}
 
-                    tok_line_toks.push(tok);
-                }
-            }
-            toks.push(tok_line_toks);
+	fn path(l: &mut Lexer<Token>) -> Option<PathBuf> {
+		let s = l.slice().strip_prefix("p\"")?.strip_suffix("\"")?;
+		Some(PathBuf::from_str(s).ok()?)
+	}
+}
 
-            if v {
-                println!("[INFO] Line {} tokenized.", line.0);
-            }
-        }
-    }
+impl fmt::Display for Token {
+	fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Token::Constant(c) => c.fmt(fmtr),
+			Token::Address(a) => a.fmt(fmtr),
+			Token::Path(p) => write!(fmtr, "path '{}'", p.display()),
+			Token::Word(w) => w.fmt(fmtr),
+			Token::Colon => write!(fmtr, "colon"),
+			Token::Newline => write!(fmtr, "newline"),
+			Token::Error => write!(fmtr, "error")
+		}
+	}
+}
 
-    if errs.is_empty() {
+impl Const {
+	pub fn character(l: &mut Lexer<Token>) -> Option<Const> {
+		let chars = l.slice().strip_prefix("'")?.strip_suffix("'")?.chars().collect::<Vec<char>>();
 
-        if v {
-            println!("[INFO] Source file has been tokenized: {} lines.", toks.len());
-        }
+		if chars[0] == '\\' {
+			// escape sequence
+			if chars.len() >= 2 {
+				match chars[1] {
+					'"' => Some(Const::Byte(Const::char_to_byte('"')?)),
+					'\\' => Some(Const::Byte(Const::char_to_byte('\\')?)),
+					'0' => Some(Const::Byte(0)),
+					'a' => Some(Const::Byte(7)),
+					'b' => Some(Const::Byte(8)),
+					'f' => Some(Const::Byte(12)),
+					'n' => Some(Const::Byte(Const::char_to_byte('\n')?)),
+					'r' => Some(Const::Byte(Const::char_to_byte('\r')?)),
+					't' => Some(Const::Byte(Const::char_to_byte('\t')?)),
+					'v' => Some(Const::Byte(11)),
+					'e' => Some(Const::Byte(0x1B)),
+					'x' => {
+						// byte escape sequence
+						if chars.len() == 4 {
+							let mut valstr = String::new();
+							valstr.push(chars[2]);
+							valstr.push(chars[3]);
 
-        Ok(toks)
-    } else {
+							if let Ok(b) = u8::from_str_radix(&valstr, 16) {
+								Some(Const::Byte(b))
+							} else { None }
+						} else { None }
+					},
+					_ => None
+				}
+			} else { None }
+		} else {
+			if chars.len() == 1 {
+				let b = Const::char_to_byte(chars[0])?;
 
-        if v {
-            eprintln!("[INFO] {} errors encountered.", errs.len());
-        }
+				Some(Const::Byte(b))
+			} else { None }
+		}
+	}
 
-        Err(errs)
-    }
+	pub fn string(l: &mut Lexer<Token>) -> Option<Const> {
+		let mut chars = l.slice().strip_prefix('"')?.strip_suffix('"')?.chars().rev().collect::<Vec<char>>();
+		let mut ret = Vec::new();
+
+		loop {
+			let c0 = chars.pop()?;
+
+			if c0 == '\\' {
+				// escape sequence
+				match chars.pop()? {
+					'"' => ret.push(Const::char_to_byte('"')?),
+					'\\' => ret.push(Const::char_to_byte('\\')?),
+					'0' => ret.push(0),
+					'a' => ret.push(7),
+					'b' => ret.push(8),
+					'f' => ret.push(12),
+					'n' => ret.push(Const::char_to_byte('\n')?),
+					'r' => ret.push(Const::char_to_byte('\r')?),
+					't' => ret.push(Const::char_to_byte('\t')?),
+					'v' => ret.push(11),
+					'x' => {
+						// byte escape sequence
+						if chars.len() == 4 {
+							let mut valstr = String::new();
+							valstr.push(chars[2]);
+							valstr.push(chars[3]);
+
+							if let Ok(b) = u8::from_str_radix(&valstr, 16) {
+								ret.push(b);
+							} else { return None }
+						} else { return None }
+					},
+					_ => return None
+				}
+			} else {
+				ret.push(Const::char_to_byte(c0)?);
+			}
+
+			if chars.is_empty() { break; }
+		}
+
+		Some(Const::String(ret))
+	}
+
+	fn char_to_byte(c: char) -> Option<u8> {
+		if c.is_ascii() {
+			let mut buf: [u8; 1] = [0x00];
+			c.encode_utf8(&mut buf);
+			Some(buf[0])
+		} else { None }
+	}
+
+	// used in fmt::Display implementation.
+	fn byte_to_ascii(b: &u8, string: bool) -> &'static str {
+		match b {
+			0x00 => "\\0",
+			0x01 => "\\x01",
+			0x02 => "\\x02",
+			0x03 => "\\x03",
+			0x04 => "\\x04",
+			0x05 => "\\x05",
+			0x06 => "\\x06",
+			0x07 => "\\a",
+			0x08 => "\\b",
+			0x09 => "\\t",
+			0x0A => "\\n",
+			0x0B => "\\v",
+			0x0C => "\\f",
+			0x0D => "\\r",
+			0x0E => "\\x0E",
+			0x0F => "\\x0F",
+			0x10 => "\\x10",
+			0x11 => "\\x11",
+			0x12 => "\\x12",
+			0x13 => "\\x13",
+			0x14 => "\\x14",
+			0x15 => "\\x15",
+			0x16 => "\\x16",
+			0x17 => "\\x17",
+			0x18 => "\\x18",
+			0x19 => "\\x19",
+			0x1A => "\\x1A",
+			0x1B => "\\e",
+			0x1C => "\\x1C",
+			0x1D => "\\x1D",
+			0x1E => "\\x1E",
+			0x1F => "\\x1F",
+			0x20 => " ",
+			0x21 => "!",
+			0x22 => if string { "\\\"" } else { "\"" },
+			0x23 => "#",
+			0x24 => "$",
+			0x25 => "%",
+			0x26 => "&",
+			0x27 => if string { "'" } else { "\\'" },
+			0x28 => "(",
+			0x29 => ")",
+			0x2A => "*",
+			0x2B => "+",
+			0x2C => ",",
+			0x2D => "-",
+			0x2E => ".",
+			0x2F => "/",
+			0x30 => "0",
+			0x31 => "1",
+			0x32 => "2",
+			0x33 => "3",
+			0x34 => "4",
+			0x35 => "5",
+			0x36 => "6",
+			0x37 => "7",
+			0x38 => "8",
+			0x39 => "9",
+			0x3A => ":",
+			0x3B => ";",
+			0x3C => "<",
+			0x3D => "=",
+			0x3E => ">",
+			0x3F => "?",
+			0x40 => "@",
+			0x41 => "A",
+			0x42 => "B",
+			0x43 => "C",
+			0x44 => "D",
+			0x45 => "E",
+			0x46 => "F",
+			0x47 => "G",
+			0x48 => "H",
+			0x49 => "I",
+			0x4A => "J",
+			0x4B => "K",
+			0x4C => "L",
+			0x4D => "M",
+			0x4E => "N",
+			0x4F => "O",
+			0x50 => "P",
+			0x51 => "Q",
+			0x52 => "R",
+			0x53 => "S",
+			0x54 => "T",
+			0x55 => "U",
+			0x56 => "V",
+			0x57 => "W",
+			0x58 => "X",
+			0x59 => "Y",
+			0x5A => "Z",
+			0x5B => "[",
+			0x5C => "\\\\",
+			0x5D => "]",
+			0x5E => "^",
+			0x5F => "_",
+			0x60 => "`",
+			0x61 => "a",
+			0x62 => "b",
+			0x63 => "c",
+			0x64 => "d",
+			0x65 => "e",
+			0x66 => "f",
+			0x67 => "g",
+			0x68 => "h",
+			0x69 => "i",
+			0x6A => "j",
+			0x6B => "k",
+			0x6C => "l",
+			0x6D => "m",
+			0x6E => "n",
+			0x6F => "o",
+			0x70 => "p",
+			0x71 => "q",
+			0x72 => "r",
+			0x73 => "s",
+			0x74 => "t",
+			0x75 => "u",
+			0x76 => "v",
+			0x77 => "w",
+			0x78 => "x",
+			0x79 => "y",
+			0x7A => "z",
+			0x7B => "{",
+			0x7C => "|",
+			0x7D => "}",
+			0x7E => "~",
+			0x7F => "\\x7F",
+			0x80 => "\\x80",
+			0x81 => "\\x81",
+			0x82 => "\\x82",
+			0x83 => "\\x83",
+			0x84 => "\\x84",
+			0x85 => "\\x85",
+			0x86 => "\\x86",
+			0x87 => "\\x87",
+			0x88 => "\\x88",
+			0x89 => "\\x89",
+			0x8A => "\\x8A",
+			0x8B => "\\x8B",
+			0x8C => "\\x8C",
+			0x8D => "\\x8D",
+			0x8E => "\\x8E",
+			0x8F => "\\x8F",
+			0x90 => "\\x90",
+			0x91 => "\\x91",
+			0x92 => "\\x92",
+			0x93 => "\\x93",
+			0x94 => "\\x94",
+			0x95 => "\\x95",
+			0x96 => "\\x96",
+			0x97 => "\\x97",
+			0x98 => "\\x98",
+			0x99 => "\\x99",
+			0x9A => "\\x9A",
+			0x9B => "\\x9B",
+			0x9C => "\\x9C",
+			0x9D => "\\x9D",
+			0x9E => "\\x9E",
+			0x9F => "\\x9F",
+			0xA0 => "\\xA0",
+			0xA1 => "\\xA1",
+			0xA2 => "\\xA2",
+			0xA3 => "\\xA3",
+			0xA4 => "\\xA4",
+			0xA5 => "\\xA5",
+			0xA6 => "\\xA6",
+			0xA7 => "\\xA7",
+			0xA8 => "\\xA8",
+			0xA9 => "\\xA9",
+			0xAA => "\\xAA",
+			0xAB => "\\xAB",
+			0xAC => "\\xAC",
+			0xAD => "\\xAD",
+			0xAE => "\\xAE",
+			0xAF => "\\xAF",
+			0xB0 => "\\xB0",
+			0xB1 => "\\xB1",
+			0xB2 => "\\xB2",
+			0xB3 => "\\xB3",
+			0xB4 => "\\xB4",
+			0xB5 => "\\xB5",
+			0xB6 => "\\xB6",
+			0xB7 => "\\xB7",
+			0xB8 => "\\xB8",
+			0xB9 => "\\xB9",
+			0xBA => "\\xBA",
+			0xBB => "\\xBB",
+			0xBC => "\\xBC",
+			0xBD => "\\xBD",
+			0xBE => "\\xBE",
+			0xBF => "\\xBF",
+			0xC0 => "\\xC0",
+			0xC1 => "\\xC1",
+			0xC2 => "\\xC2",
+			0xC3 => "\\xC3",
+			0xC4 => "\\xC4",
+			0xC5 => "\\xC5",
+			0xC6 => "\\xC6",
+			0xC7 => "\\xC7",
+			0xC8 => "\\xC8",
+			0xC9 => "\\xC9",
+			0xCA => "\\xCA",
+			0xCB => "\\xCB",
+			0xCC => "\\xCC",
+			0xCD => "\\xCD",
+			0xCE => "\\xCE",
+			0xCF => "\\xCF",
+			0xD0 => "\\xD0",
+			0xD1 => "\\xD1",
+			0xD2 => "\\xD2",
+			0xD3 => "\\xD3",
+			0xD4 => "\\xD4",
+			0xD5 => "\\xD5",
+			0xD6 => "\\xD6",
+			0xD7 => "\\xD7",
+			0xD8 => "\\xD8",
+			0xD9 => "\\xD9",
+			0xDA => "\\xDA",
+			0xDB => "\\xDB",
+			0xDC => "\\xDC",
+			0xDD => "\\xDD",
+			0xDE => "\\xDE",
+			0xDF => "\\xDF",
+			0xE0 => "\\xE0",
+			0xE1 => "\\xE1",
+			0xE2 => "\\xE2",
+			0xE3 => "\\xE3",
+			0xE4 => "\\xE4",
+			0xE5 => "\\xE5",
+			0xE6 => "\\xE6",
+			0xE7 => "\\xE7",
+			0xE8 => "\\xE8",
+			0xE9 => "\\xE9",
+			0xEA => "\\xEA",
+			0xEB => "\\xEB",
+			0xEC => "\\xEC",
+			0xED => "\\xED",
+			0xEE => "\\xEE",
+			0xEF => "\\xEF",
+			0xF0 => "\\xF0",
+			0xF1 => "\\xF1",
+			0xF2 => "\\xF2",
+			0xF3 => "\\xF3",
+			0xF4 => "\\xF4",
+			0xF5 => "\\xF5",
+			0xF6 => "\\xF6",
+			0xF7 => "\\xF7",
+			0xF8 => "\\xF8",
+			0xF9 => "\\xF9",
+			0xFA => "\\xFA",
+			0xFB => "\\xFB",
+			0xFC => "\\xFC",
+			0xFD => "\\xFD",
+			0xFE => "\\xFE",
+			0xFF => "\\xFF"
+		}
+	}
+
+	pub fn dec(l: &mut Lexer<Token>) -> Option<Const> {
+		let s = l.slice().strip_prefix("#")?;
+
+		if let Ok(b) = u8::from_str_radix(s, 10) {
+			Some(Const::Byte(b))
+		} else if let Ok(w) = u16::from_str_radix(s, 10) {
+			Some(Const::Word(w))
+		} else { None }
+	}
+
+	pub fn bin(l: &mut Lexer<Token>) -> Option<Const> {
+		let s = l.slice().strip_prefix("#%")?;
+
+		if let Ok(b) = u8::from_str_radix(s, 2) {
+			Some(Const::Byte(b))
+		} else if let Ok(w) = u16::from_str_radix(s, 2) {
+			Some(Const::Word(w))
+		} else { None }
+	}
+
+	pub fn hex(l: &mut Lexer<Token>) -> Option<Const> {
+		let s = l.slice().strip_prefix("#$")?;
+
+		if let Ok(b) = u8::from_str_radix(s, 16) {
+			Some(Const::Byte(b))
+		} else if let Ok(w) = u16::from_str_radix(s, 16) {
+			Some(Const::Word(w))
+		} else { None }
+	}
+}
+
+impl fmt::Display for Const {
+	fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Const::Byte(b) => write!(fmtr, "byte immediate {} (as char: '{}')", b, Const::byte_to_ascii(b, false)),
+			Const::String(s) => {
+				let mut string = String::new();
+
+				for b in s {
+					string.push_str(Const::byte_to_ascii(b, true))
+				}
+
+				write!(fmtr, "string literal \"{}\"", string)
+			},
+			Const::Word(w) => write!(fmtr, "word immediate {}", w)
+		}
+	}
+}
+
+impl Addr {
+	pub fn dec(l: &mut Lexer<Token>) -> Option<Addr> {
+		let mut s = l.slice();
+
+		if s.starts_with("IP") || s.starts_with("SP") {
+			// pointer relative, store pointer in variable
+			let ptr = match &s[0..2] {
+				"IP" => {
+					s = s.strip_prefix("IP")?;
+					Ptr::Instruction
+				},
+				"SP" => {
+					s = s.strip_prefix("SP")?;
+					Ptr::Stack
+				},
+				_ => return None
+			};
+
+			if let Ok(xpr) = i16::from_str_radix(s, 10) {
+				Some(Addr::PointerRelative(xpr, ptr))
+			} else { None }
+		} else if s.starts_with("(") && s.ends_with(")") {
+			// indirect
+			s = s.strip_prefix("(")?.strip_suffix(")")?;
+
+			if let Ok(zb) = u16::from_str_radix(s, 10) {
+				Some(Addr::ZeroBank(zb, true))
+			} else if let Ok(a) = u32::from_str_radix(s, 10) {
+				if a <= 0xFFFFFF {
+					Some(Addr::Absolute(a, true))
+				} else { None }
+			} else { None }
+		} else if s.ends_with("p") {
+			// port
+			s = s.strip_suffix("p")?;
+
+			if let Ok(p) = u16::from_str_radix(s, 10) {
+				Some(Addr::Port(p))
+			} else { None }
+		} else if s.ends_with("d") {
+			// direct page
+			s = s.strip_suffix("d")?;
+
+			if let Ok(dp) = u8::from_str_radix(s, 10) {
+				Some(Addr::DirectPage(dp))
+			} else { None }
+		} else {
+			// direct
+			if let Ok(zb) = u16::from_str_radix(s, 10) {
+				Some(Addr::ZeroBank(zb, false))
+			} else if let Ok(a) = u32::from_str_radix(s, 10) {
+				if a <= 0xFFFFFF {
+					Some(Addr::Absolute(a, false))
+				} else { None }
+			} else { None }
+		}
+	}
+
+	pub fn bin(l: &mut Lexer<Token>) -> Option<Addr> {
+		let mut s = l.slice();
+
+		if s.starts_with("IP") || s.starts_with("SP") {
+			// pointer relative
+			let ptr = match &s[0..2] {
+				"IP" => {
+					s = s.strip_prefix("IP")?;
+					Ptr::Instruction
+				},
+				"SP" => {
+					s = s.strip_prefix("SP")?;
+					Ptr::Stack
+				},
+				_ => return None
+			};
+
+			let positive = if s.starts_with("+") {
+				s = s.strip_prefix("+%")?;
+				true
+			} else if s.starts_with("-") {
+				s = s.strip_prefix("-%")?;
+				true
+			} else { return None };
+
+			if let Ok(xpr) = i16::from_str_radix(s, 2) {
+				if positive {
+					Some(Addr::PointerRelative(xpr, ptr))
+				} else {
+					Some(Addr::PointerRelative(-xpr, ptr))
+				}
+			} else { None }
+		} else if s.starts_with("(") && s.ends_with(")") {
+			// indirect
+			s = s.strip_prefix("(")?.strip_suffix(")")?;
+
+			if let Ok(zb) = u16::from_str_radix(s, 2) {
+				Some(Addr::ZeroBank(zb, true))
+			} else if let Ok(a) = u32::from_str_radix(s, 2) {
+				if a <= 0xFFFFFF {
+					Some(Addr::Absolute(a, true))
+				} else { None }
+			} else { None }
+		} else if s.ends_with("p") {
+			// port
+			s = s.strip_suffix("p")?;
+
+			if let Ok(p) = u16::from_str_radix(s, 2) {
+				Some(Addr::Port(p))
+			} else { None }
+		} else {
+			// direct
+			s = s.strip_prefix("%")?;
+
+			if let Ok(dp) = u8::from_str_radix(s, 2) {
+				Some(Addr::DirectPage(dp))
+			} else if let Ok(zb) = u16::from_str_radix(s, 2) {
+				Some(Addr::ZeroBank(zb, false))
+			} else if let Ok(a) = u32::from_str_radix(s, 2) {
+				if a <= 0xFFFFFF {
+					Some(Addr::Absolute(a, false))
+				} else { None }
+			} else { None }
+		}
+	}
+
+	pub fn hex(l: &mut Lexer<Token>) -> Option<Addr> {
+		let mut s = l.slice();
+
+		if s.starts_with("IP") || s.starts_with("SP") {
+			// pointer relative
+			let ptr = match &s[0..2] {
+				"IP" => {
+					s = s.strip_prefix("IP")?;
+					Ptr::Instruction
+				},
+				"SP" => {
+					s = s.strip_prefix("SP")?;
+					Ptr::Stack
+				},
+				_ => return None
+			};
+
+			let positive = if s.starts_with("+") {
+				s = s.strip_prefix("+$")?;
+				true
+			} else if s.starts_with("-") {
+				s = s.strip_prefix("-$")?;
+				true
+			} else { return None };
+
+			if let Ok(xpr) = i16::from_str_radix(s, 16) {
+				if positive {
+					Some(Addr::PointerRelative(xpr, ptr))
+				} else {
+					Some(Addr::PointerRelative(-xpr, ptr))
+				}
+			} else { None }
+		} else if s.starts_with("(") && s.ends_with(")") {
+			// indirect
+			s = s.strip_prefix("(")?.strip_suffix(")")?;
+
+			if let Ok(zb) = u16::from_str_radix(s, 16) {
+				Some(Addr::ZeroBank(zb, true))
+			} else if let Ok(a) = u32::from_str_radix(s, 16) {
+				if a <= 0xFFFFFF {
+					Some(Addr::Absolute(a, true))
+				} else { None }
+			} else { None }
+		} else if s.ends_with("p") {
+			// port
+			s = s.strip_suffix("p")?;
+
+			if let Ok(p) = u16::from_str_radix(s, 16) {
+				Some(Addr::Port(p))
+			} else { None }
+		} else {
+			// direct
+			s = s.strip_prefix("$")?;
+
+			if let Ok(dp) = u8::from_str_radix(s, 16) {
+				Some(Addr::DirectPage(dp))
+			} else if let Ok(zb) = u16::from_str_radix(s, 16) {
+				Some(Addr::ZeroBank(zb, false))
+			} else if let Ok(a) = u32::from_str_radix(s, 16) {
+				if a <= 0xFFFFFF {
+					Some(Addr::Absolute(a, false))
+				} else { None }
+			} else { None }
+		}
+	}
+}
+
+impl fmt::Display for Addr {
+	fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Addr::Absolute(a, i) => if *i { write!(fmtr, "absolute address {}", a) } else { write!(fmtr, "indirect absolute address ({})", a) },
+			Addr::ZeroBank(zb, i) => if *i { write!(fmtr, "zero bank address {}", zb) } else { write!(fmtr, "indirect zero bank address ({})", zb) },
+			Addr::Port(p) => write!(fmtr, "port address {}p", p),
+			Addr::DirectPage(dp) => write!(fmtr, "direct page address {}", dp),
+			Addr::PointerRelative(xpr, ptr) => match ptr {
+				Ptr::Instruction => write!(fmtr, "instruction pointer relative address IP{}", xpr),
+				Ptr::Stack => write!(fmtr, "stack pointer relative address SP{}", xpr)
+			}
+		}
+	}
+}
+
+impl Wrd {
+	pub fn new(l: &mut Lexer<Token>) -> Wrd {
+		let s = l.slice();
+		let s_lower = s.to_lowercase();
+
+		match s_lower.as_str() {
+			"nop" => Wrd::NoOperation,
+			"mvr" => Wrd::MoveToRegister,
+			"mvm" => Wrd::MoveToMemory,
+			"mvrx" => Wrd::MoveToRegisterX,
+			"mvry" => Wrd::MoveToRegisterY,
+			"mvmx" => Wrd::MoveToMemoryX,
+			"mvmy" => Wrd::MoveToMemoryY,
+			"srz" => Wrd::SetRegisterToZero,
+			"smz" => Wrd::SetMemoryToZero,
+			"smzx" => Wrd::SetMemoryToZeroX,
+			"smzy" => Wrd::SetMemoryToZeroY,
+			"hacf" => Wrd::HaltAndCatchFire,
+			"trc" => Wrd::TransferRegisterContents,
+			"src" => Wrd::SwapRegisterContents,
+			"sspx" => Wrd::StoreStackPointerToX,
+			"gspx" => Wrd::GetStackPointerFromX,
+			"ssb" => Wrd::SetStackBank,
+			"sdp" => Wrd::SetDirectPage,
+			"push" => Wrd::PushToStack,
+			"pop" => Wrd::PopFromStack,
+			"pshif" => Wrd::PushIntegerFlagsToStack,
+			"popif" => Wrd::PopIntegerFlagsFromStack,
+			"and" => Wrd::And,
+			"or" => Wrd::Or,
+			"eor" => Wrd::ExclusiveOr,
+			"addi" => Wrd::AddIntegers,
+			"adci" => Wrd::AddIntegersWithCarry,
+			"subi" => Wrd::SubtractIntegers,
+			"sbci" => Wrd::SubtractIntegersWithCarry,
+			"not" => Wrd::Not,
+			"shl" => Wrd::ShiftLeft,
+			"shr" => Wrd::ShiftRight,
+			"rol" => Wrd::RotateLeft,
+			"ror" => Wrd::RotateRight,
+			"pcnt" => Wrd::PopulationCount,
+			"vcnt" => Wrd::VacancyCount,
+			"swz" => Wrd::Swizzle,
+			"set" => Wrd::SetBits,
+			"clr" => Wrd::ClearBits,
+			"eirq" => Wrd::EnableMaskableInterrupts,
+			"dirq" => Wrd::DisableMaskableInterrupts,
+			"sed" => Wrd::SetDecimalFlag,
+			"cld" => Wrd::ClearDecimalFlag,
+			"ses" => Wrd::SetSignFlag,
+			"cls" => Wrd::ClearSignFlag,
+			"sen" => Wrd::SetNegativeFlag,
+			"cln" => Wrd::ClearNegativeFlag,
+			"seh" => Wrd::SetHalfCarryFlag,
+			"clh" => Wrd::ClearHalfCarryFlag,
+			"sec" => Wrd::SetCarryFlag,
+			"clc" => Wrd::ClearCarryFlag,
+			"clo" => Wrd::ClearOverflowFlag,
+			"sez" => Wrd::SetZeroFlag,
+			"clz" => Wrd::ClearZeroFlag,
+			"jmp" => Wrd::Jump,
+			"jmpx" => Wrd::JumpX,
+			"jmpy" => Wrd::JumpY,
+			"call" => Wrd::CallSubroutine,
+			"cmpi" => Wrd::CompareIntegers,
+			"beq" => Wrd::BranchIfEqual,
+			"bne" => Wrd::BranchIfNotEqual,
+			"blu" => Wrd::BranchIfLessThanUnsigned,
+			"bls" => Wrd::BranchIfLessThanSigned,
+			"bgu" => Wrd::BranchIfGreaterThanUnsigned,
+			"bgs" => Wrd::BranchIfGreaterThanSigned,
+			"bleu" => Wrd::BranchIfLessThanOrEqualUnsigned,
+			"bles" => Wrd::BranchIfLessThanOrEqualSigned,
+			"bgeu" => Wrd::BranchIfGreaterThanOrEqualUnsigned,
+			"bges" => Wrd::BranchIfGreaterThanOrEqualSigned,
+			"bcs" => Wrd::BranchIfCarrySet,
+			"bcc" => Wrd::BranchIfCarryClear,
+			"bhs" => Wrd::BranchIfHalfCarrySet,
+			"bhc" => Wrd::BranchIfHalfCarryClear,
+			"bos" => Wrd::BranchIfOverflowSet,
+			"boc" => Wrd::BranchIfOverflowClear,
+			"inc" => Wrd::Increment,
+			"ixbne" => Wrd::IncrementXBranchIfNotEqual,
+			"iybne" => Wrd::IncrementYBranchIfNotEqual,
+			"dec" => Wrd::Decrement,
+			"dxbnz" => Wrd::DecrementXBranchIfNotZero,
+			"dybnz" => Wrd::DecrementYBranchIfNotZero,
+			"bit" => Wrd::TestBits,
+			"bsf" => Wrd::BranchIfStackFull,
+			"bse" => Wrd::BranchIfStackEmpty,
+			"bdp" => Wrd::BranchDataParity,
+			"cirq" => Wrd::CallInterrupt,
+			"ret" => Wrd::ReturnFromSubroutine,
+			"rti" => Wrd::ReturnFromInterrupt,
+			"brk" => Wrd::Break,
+			"wait" => Wrd::WaitForInterrupt,
+			"ia" => Wrd::IntegerRegisterA,
+			"ial" => Wrd::IntegerRegisterALow,
+			"iah" => Wrd::IntegerRegisterAHigh,
+			"ib" => Wrd::IntegerRegisterB,
+			"ibl" => Wrd::IntegerRegisterBLow,
+			"ibh" => Wrd::IntegerRegisterBHigh,
+			"ix" => Wrd::IntegerRegisterX,
+			"iy" => Wrd::IntegerRegisterY,
+			".org" => Wrd::Origin,
+			".def" => Wrd::DefineSymbol,
+			".byte" => Wrd::PlaceByte,
+			".word" => Wrd::PlaceWord,
+			".vec" => Wrd::PlaceVector,
+			".str" => Wrd::PlaceString,
+			".strz" => Wrd::PlaceNullTerminatedString,
+			".incsrc" => Wrd::IncludeSource,
+			".incbin" => Wrd::IncludeBinary,
+			_ => Wrd::Identifier(String::from(s))
+		}
+	}
+}
+
+impl fmt::Display for Wrd {
+	fn fmt(&self, fmtr: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Wrd::NoOperation => write!(fmtr, "NOP instruction"),
+			Wrd::MoveToRegister => write!(fmtr, "MVR instruction"),
+			Wrd::MoveToMemory => write!(fmtr, "MVM instruction"),
+			Wrd::MoveToRegisterX => write!(fmtr, "MVRX instruction"),
+			Wrd::MoveToRegisterY => write!(fmtr, "MVRY instruction"),
+			Wrd::MoveToMemoryX => write!(fmtr, "MVMX instruction"),
+			Wrd::MoveToMemoryY => write!(fmtr, "MVMY instruction"),
+			Wrd::SetRegisterToZero => write!(fmtr, "SRZ instruction"),
+			Wrd::SetMemoryToZero => write!(fmtr, "SMZ instruction"),
+			Wrd::SetMemoryToZeroX => write!(fmtr, "SMZX instruction"),
+			Wrd::SetMemoryToZeroY => write!(fmtr, "SMZY instruction"),
+			Wrd::HaltAndCatchFire => write!(fmtr, "HACF instruction"),
+			Wrd::TransferRegisterContents => write!(fmtr, "TRC instruction"),
+			Wrd::SwapRegisterContents => write!(fmtr, "SRC instruction"),
+			Wrd::StoreStackPointerToX => write!(fmtr, "SSPX instruction"),
+			Wrd::GetStackPointerFromX => write!(fmtr, "GSPX instruction"),
+			Wrd::SetStackBank => write!(fmtr, "SSB instruction"),
+			Wrd::SetDirectPage => write!(fmtr, "SDP instruction"),
+			Wrd::PushToStack => write!(fmtr, "PUSH instruction"),
+			Wrd::PopFromStack => write!(fmtr, "POP instruction"),
+			Wrd::PushIntegerFlagsToStack => write!(fmtr, "PSHIF instruction"),
+			Wrd::PopIntegerFlagsFromStack => write!(fmtr, "POPIF instruction"),
+			Wrd::And => write!(fmtr, "AND instruction"),
+			Wrd::Or => write!(fmtr, "OR instruction"),
+			Wrd::ExclusiveOr => write!(fmtr, "EOR instruction"),
+			Wrd::AddIntegers => write!(fmtr, "ADDI instruction"),
+			Wrd::AddIntegersWithCarry => write!(fmtr, "ADCI instruction"),
+			Wrd::SubtractIntegers => write!(fmtr, "SUBI instruction"),
+			Wrd::SubtractIntegersWithCarry => write!(fmtr, "SBCI instruction"),
+			Wrd::Not => write!(fmtr, "NOT instruction"),
+			Wrd::ShiftLeft => write!(fmtr, "SHL instruction"),
+			Wrd::ShiftRight => write!(fmtr, "SHR instruction"),
+			Wrd::RotateLeft => write!(fmtr, "ROL instruction"),
+			Wrd::RotateRight => write!(fmtr, "ROR instruction"),
+			Wrd::PopulationCount => write!(fmtr, "PCNT instruction"),
+			Wrd::VacancyCount => write!(fmtr, "VCNT instruction"),
+			Wrd::Swizzle => write!(fmtr, "SWZ instruction"),
+			Wrd::SetBits => write!(fmtr, "SET instruction"),
+			Wrd::ClearBits => write!(fmtr, "CLR instruction"),
+			Wrd::EnableMaskableInterrupts => write!(fmtr, "EIRQ instruction"),
+			Wrd::DisableMaskableInterrupts => write!(fmtr, "DIRQ instruction"),
+			Wrd::SetDecimalFlag => write!(fmtr, "SED instruction"),
+			Wrd::ClearDecimalFlag => write!(fmtr, "CLD instruction"),
+			Wrd::SetSignFlag => write!(fmtr, "SES instruction"),
+			Wrd::ClearSignFlag => write!(fmtr, "CLS instruction"),
+			Wrd::SetNegativeFlag => write!(fmtr, "SEN instruction"),
+			Wrd::ClearNegativeFlag => write!(fmtr, "CLN instruction"),
+			Wrd::SetHalfCarryFlag => write!(fmtr, "SEH instruction"),
+			Wrd::ClearHalfCarryFlag => write!(fmtr, "CLH instruction"),
+			Wrd::SetCarryFlag => write!(fmtr, "SEC instruction"),
+			Wrd::ClearCarryFlag => write!(fmtr, "CLC instruction"),
+			Wrd::ClearOverflowFlag => write!(fmtr, "CLO instruction"),
+			Wrd::SetZeroFlag => write!(fmtr, "SEZ instruction"),
+			Wrd::ClearZeroFlag => write!(fmtr, "CLZ instruction"),
+			Wrd::Jump => write!(fmtr, "JMP instruction"),
+			Wrd::JumpX => write!(fmtr, "JMPX instruction"),
+			Wrd::JumpY => write!(fmtr, "JMPY instruction"),
+			Wrd::CallSubroutine => write!(fmtr, "CALL instruction"),
+			Wrd::CompareIntegers => write!(fmtr, "CMPI instruction"),
+			Wrd::BranchIfEqual => write!(fmtr, "BEQ instruction"),
+			Wrd::BranchIfNotEqual => write!(fmtr, "BNE instruction"),
+			Wrd::BranchIfLessThanUnsigned => write!(fmtr, "BLTU instruction"),
+			Wrd::BranchIfLessThanSigned => write!(fmtr, "BLTS instruction"),
+			Wrd::BranchIfGreaterThanUnsigned => write!(fmtr, "BGTU instruction"),
+			Wrd::BranchIfGreaterThanSigned => write!(fmtr, "BGTS instruction"),
+			Wrd::BranchIfLessThanOrEqualUnsigned => write!(fmtr, "BLEU instruction"),
+			Wrd::BranchIfLessThanOrEqualSigned => write!(fmtr, "BLES instruction"),
+			Wrd::BranchIfGreaterThanOrEqualUnsigned => write!(fmtr, "BGEU instruction"),
+			Wrd::BranchIfGreaterThanOrEqualSigned => write!(fmtr, "BGES instruction"),
+			Wrd::BranchIfCarrySet => write!(fmtr, "BCS instruction"),
+			Wrd::BranchIfCarryClear => write!(fmtr, "BCC instruction"),
+			Wrd::BranchIfHalfCarrySet => write!(fmtr, "BHS instruction"),
+			Wrd::BranchIfHalfCarryClear => write!(fmtr, "BHC instruction"),
+			Wrd::BranchIfOverflowSet => write!(fmtr, "BOS instruction"),
+			Wrd::BranchIfOverflowClear => write!(fmtr, "BOC instruction"),
+			Wrd::Increment => write!(fmtr, "INC instruction"),
+			Wrd::IncrementXBranchIfNotEqual => write!(fmtr, "IXBNE instruction"),
+			Wrd::IncrementYBranchIfNotEqual => write!(fmtr, "IYBNE instruction"),
+			Wrd::Decrement => write!(fmtr, "DEC instruction"),
+			Wrd::DecrementXBranchIfNotZero => write!(fmtr, "DXBNZ instruction"),
+			Wrd::DecrementYBranchIfNotZero => write!(fmtr, "DYBNZ instruction"),
+			Wrd::TestBits => write!(fmtr, "BIT instruction"),
+			Wrd::BranchIfStackFull => write!(fmtr, "BSF instruction"),
+			Wrd::BranchIfStackEmpty => write!(fmtr, "BSE instruction"),
+			Wrd::BranchDataParity => write!(fmtr, "BDP instruction"),
+			Wrd::CallInterrupt => write!(fmtr, "CIRQ instruction"),
+			Wrd::ReturnFromSubroutine => write!(fmtr, "RET instruction"),
+			Wrd::ReturnFromInterrupt => write!(fmtr, "RTI instruction"),
+			Wrd::Break => write!(fmtr, "BRK instruction"),
+			Wrd::WaitForInterrupt => write!(fmtr, "WAIT instruction"),
+			Wrd::IntegerRegisterA => write!(fmtr, "register iA"),
+			Wrd::IntegerRegisterALow => write!(fmtr, "register iAL"),
+			Wrd::IntegerRegisterAHigh => write!(fmtr, "register iAH"),
+			Wrd::IntegerRegisterB => write!(fmtr, "register iB"),
+			Wrd::IntegerRegisterBLow => write!(fmtr, "register iBL"),
+			Wrd::IntegerRegisterBHigh => write!(fmtr, "register iBH"),
+			Wrd::IntegerRegisterX => write!(fmtr, "register iX"),
+			Wrd::IntegerRegisterY => write!(fmtr, "register iY"),
+			Wrd::Origin => write!(fmtr, "Origin directive"),
+			Wrd::DefineSymbol => write!(fmtr, "Define Symbol directive"),
+			Wrd::PlaceByte => write!(fmtr, "Place Byte directive"),
+			Wrd::PlaceWord => write!(fmtr, "Place Word directive"),
+			Wrd::PlaceVector => write!(fmtr, "Place Vector directive"),
+			Wrd::PlaceString => write!(fmtr, "Place String directive"),
+			Wrd::PlaceNullTerminatedString => write!(fmtr, "Place Null-Terminated Stringdirective"),
+			Wrd::IncludeSource => write!(fmtr, "Include Source directive"),
+			Wrd::IncludeBinary => write!(fmtr, "Include Binary directive"),
+			Wrd::Identifier(id) => write!(fmtr, "identifier '{}'", id)
+		}
+	}
 }
