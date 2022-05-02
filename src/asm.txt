@@ -8,7 +8,7 @@ Okay, I should probably put here a list of all the features this assembler shoul
     .vector     Puts an absolute address in the output binary. Mainly useful for interrupt vectors, and for indirect absolute addressing.
     .ascii      Puts an ASCII string in the output binary.
     .asciiz     Puts a null-terminated ASCII string in the output binary.
-    .include    Includes the given assembly file.
+    .incsrc     Includes the given assembly file.
     .incbin     Includes the given binary file.
 
 2: Addressing modes. The Cellia architecture has the following addressing modes:

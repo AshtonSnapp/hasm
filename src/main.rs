@@ -1,7 +1,6 @@
 //--> Imports <--
 
 mod lex;
-mod parse;
 
 use lex::{Token, TokenStream};
 use clap::{Arg, command, ValueHint};
@@ -10,7 +9,6 @@ use std::fs::{File, ReadDir, read_dir};
 use std::io;
 use std::io::{ErrorKind, Write};
 use std::collections::HashMap;
-use parse::{FileAsm, ProgAsm};
 use std::process::exit;
 
 //--> Type Aliases <--
@@ -101,51 +99,7 @@ fn assemble(sources: Vec<&Path>, output: &Path) -> Result<StringList, (StringLis
         }
     }
 
-    let mut file_asms: HashMap<&Path, FileAsm> = HashMap::new();
-
-    for (source, tok) in toks {
-        match FileAsm::parse(source, tok) {
-            Ok((file_asm, mut w)) => {
-                file_asms.insert(source, file_asm);
-                wrns.append(&mut w);
-            },
-            Err((mut e, mut w)) => {
-                errs.append(&mut e);
-                wrns.append(&mut w);
-                return Err((errs, wrns))
-            }
-        }
-    }
-
-    let prg_asm = match ProgAsm::link(file_asms) {
-        Ok((p, mut w)) => {
-            wrns.append(&mut w);
-            p
-        },
-        Err((mut e, mut w)) => {
-            errs.append(&mut e);
-            wrns.append(&mut w);
-            return Err((errs, wrns))
-        }
-    };
-
-    let prg_bytes = prg_asm.to_bytes();
-    let outfile_name = output.with_extension("bin");
-    let ofn = outfile_name.clone();
-
-    match File::create(outfile_name) {
-        Ok(mut f) => match f.write_all(prg_bytes) {
-            Ok(()) => match f.flush() {
-                Ok(()) => {},
-                Err(e) => errs.push(format!("<ERR! {}> Unexpected I/O error encountered trying to flush bytes to file: {}", ofn.display(), e))
-            },
-            Err(e) => errs.push(format!("<ERR! {}> Unexpected I/O error encountered trying to write bytes to file: {}", ofn.display(), e))
-        },
-        Err(e) => match e.kind() {
-            ErrorKind::PermissionDenied => errs.push(format!("<ERR! {}> Denied permission to create or open the file for writing.", ofn.display())),
-            _ => errs.push(format!("<ERR! {}> Unepected I/O error encountered trying to create or open the file for writing: {}", ofn.display(), e))
-        }
-    }
+    // TODO
 
     if errs.is_empty() {
         Ok(wrns)
