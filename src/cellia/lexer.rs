@@ -49,6 +49,7 @@ pub enum TokenInner {
 	#[regex(r"#\$[0-9a-fA-F][_0-9a-fA-F]", Imm::hexadecimal)]
 	#[regex(r"#0(x|X)[0-9a-fA-F][_0-9a-fA-F]", Imm::hexadecimal)]
 	#[regex(r"#[0-9a-fA-F][_0-9a-fA-F](h|H)", Imm::hexadecimal)]
+	#[regex(r"'([\x00-\x7F]+|\\')'", Imm::character)]
 	Immediate(Imm),
 
 	#[regex(r#""([\x00-\x7F]|\\")+""#, TokenInner::string)]
@@ -157,7 +158,6 @@ pub enum Word {
 
 #[derive(Clone)]
 pub enum Reg {
-	Pair(RegPair),
 	Full(FullReg),
 	Short(ShortReg),
 }
@@ -432,6 +432,12 @@ impl Imm {
 		else if let Ok(w) = u16::from_str_radix(&slice, 16) { Some(Imm::Word(w)) }
 		else { None }
 	}
+
+	pub fn character(l: &mut Lexer<TokenInner>) -> Option<Imm> {
+		let s = l.slice().strip_prefix("'")?.strip_suffix("'")?;
+
+		Some(Imm::Byte(text::make_ascii_character(s)?))
+	}
 }
 
 impl Addr {
@@ -561,9 +567,9 @@ impl Addr {
 
 				match slice.as_str() {
 					"aw" => Some(Addr::AbsoluteIndirect(RegPair::AW)),
-					"bx" => Some(Addr::AbsoluteIndirect(RegPair::AW)),
-					"cy" => Some(Addr::AbsoluteIndirect(RegPair::AW)),
-					"dz" => Some(Addr::AbsoluteIndirect(RegPair::AW)),
+					"bx" => Some(Addr::AbsoluteIndirect(RegPair::BX)),
+					"cy" => Some(Addr::AbsoluteIndirect(RegPair::CY)),
+					"dz" => Some(Addr::AbsoluteIndirect(RegPair::DZ)),
 					"a" => Some(Addr::ZeroBankIndirect(FullReg::A)),
 					"b" => Some(Addr::ZeroBankIndirect(FullReg::B)),
 					"c" => Some(Addr::ZeroBankIndirect(FullReg::C)),
@@ -665,7 +671,7 @@ impl Word {
 			// Identifier
 			Some(Word::Identifier(s))
 		} else {
-			// Instruction or Identifier
+			// Instruction, Register, or Identifier
 			Some(match s.to_lowercase().as_str() {
 				"nop" => Word::Instruction(Inst::NoOperation),
 				"clz" => Word::Instruction(Inst::ClearZeroFlag),
@@ -786,6 +792,14 @@ impl Word {
 				"dit" => Word::Instruction(Inst::DispatchInterruptTable),
 				"wait" => Word::Instruction(Inst::WaitForInterrupt),
 				"halt" => Word::Instruction(Inst::Halt),
+				"a" => Word::Register(Reg::Full(FullReg::A)),
+				"b" => Word::Register(Reg::Full(FullReg::B)),
+				"c" => Word::Register(Reg::Full(FullReg::C)),
+				"d" => Word::Register(Reg::Full(FullReg::D)),
+				"w" => Word::Register(Reg::Short(ShortReg::W)),
+				"x" => Word::Register(Reg::Short(ShortReg::X)),
+				"y" => Word::Register(Reg::Short(ShortReg::Y)),
+				"z" => Word::Register(Reg::Short(ShortReg::Z)),
 				_ => Word::Identifier(s)
 			})
 		}

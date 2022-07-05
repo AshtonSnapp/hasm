@@ -49,6 +49,7 @@ pub enum TokenInner {
 	#[regex(r"#\$[0-9a-fA-F][_0-9a-fA-F]", TokenInner::hexadecimal)]
 	#[regex(r"#0(x|X)[0-9a-fA-F][_0-9a-fA-F]", TokenInner::hexadecimal)]
 	#[regex(r"#[0-9a-fA-F][_0-9a-fA-F](h|H)", TokenInner::hexadecimal)]
+	#[regex(r"'([\x00-\x7F]+|\\')'", TokenInner::character)]
 	Immediate(u8),
 
 	#[regex(r#""([\x00-\x7F]|\\")+""#, TokenInner::string)]
@@ -304,6 +305,12 @@ impl TokenInner {
 		else { None }
 	}
 
+	pub fn character(l: &mut Lexer<TokenInner>) -> Option<u8> {
+		let s = l.slice().strip_prefix("'")?.strip_suffix("'")?;
+
+		Some(text::make_ascii_character(s)?)
+	}
+
 	fn string(l: &mut Lexer<TokenInner>) -> Option<Vec<u8>> {
 		let s = l.slice().strip_prefix('"')?.strip_suffix('"')?;
 
@@ -413,7 +420,7 @@ impl Word {
 			// Identifier
 			Some(Word::Identifier(s))
 		} else {
-			// Instruction or Identifier
+			// Instruction, Register, or Identifier
 			Some(match s.to_lowercase().as_str() {
 				"nop" => Word::Instruction(Inst::NoOperation),
 				"ldaz" => Word::Instruction(Inst::LoadAZero),
@@ -495,6 +502,12 @@ impl Word {
 				"lbcs" => Word::Instruction(Inst::LoadBCWithStackPointer),
 				"clc" => Word::Instruction(Inst::ClearCarry),
 				"sec" => Word::Instruction(Inst::SetCarry),
+				"a" => Word::Register(Reg::A),
+				"bc" => Word::Register(Reg::PairBC),
+				"b" => Word::Register(Reg::B),
+				"c" => Word::Register(Reg::C),
+				"dd" => Word::Register(Reg::ShadowDD),
+				"ee" => Word::Register(Reg::ShadowEE),
 				_ => Word::Identifier(s)
 			})
 		}
