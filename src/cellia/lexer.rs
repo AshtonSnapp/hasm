@@ -1,6 +1,7 @@
 //--> Imports <--
 
 use std::{
+	fmt,
 	fs::File,
 	io::{
 		BufRead,
@@ -93,7 +94,7 @@ pub enum TokenInner {
 	#[regex(r"(i|I|s|S)(p|P)\+[abcdABCD]", Addr::indirect)]
 	Address(Addr),
 
-	#[regex(r"[\^&*-=\+|:<>/]", Op::new)]
+	#[regex(r"[~\^&*-=\+|:<>/]+", Op::new)]
 	Operator(Op),
 
 	#[regex(r".?[_a-zA-Z][_0-9a-zA-Z]*\$?", Word::new)]
@@ -135,6 +136,7 @@ pub enum Ptr {
 
 #[derive(Clone)]
 pub enum Op {
+	Tilde,
 	Caret,
 	Ampersand,
 	Star,
@@ -143,8 +145,13 @@ pub enum Op {
 	Plus,
 	Pipe,
 	Colon,
-	LeftAngle,
-	RightAngle,
+	Less,
+	LessOrEqual,
+	Greater,
+	GreaterOrEqual,
+	ShiftLeft,
+	ShiftRight,
+	NotEquals,
 	Slash
 }
 
@@ -375,6 +382,255 @@ pub(crate) fn lex(verbose: bool, path: PathBuf) -> Result {
 impl Token {
 	pub fn new(inner: TokenInner, line: usize, span: Range<usize>, slice: &str) -> Token {
 		Token { inner, line, span, source: String::from(slice) }
+	}
+}
+
+impl fmt::Display for Token {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match &self.inner {
+			TokenInner::Immediate(imm) => match imm {
+				Imm::Byte(b) => write!(f, "an immediate byte {}", b),
+				Imm::Word(w) => write!(f, "an immediate word {}", w),
+			},
+			TokenInner::String(lit) => {
+				let mut display = String::new();
+
+				for b in lit {
+					display.push(text::byte_to_ascii(*b).ok_or(fmt::Error)?);
+				}
+
+				write!(f, "a string literal \"{}\"", display)
+			},
+			TokenInner::Path(path) => write!(f, "a path to '{}'", path.display()),
+			TokenInner::Address(addr) => match addr {
+				Addr::Absolute(a) => write!(f, "an absolute address {}", a),
+				Addr::AbsoluteIndirect(rp) => match rp {
+					RegPair::AW => write!(f, "an absolute indirect address through AW"),
+					RegPair::BX => write!(f, "an absolute indirect address through BX"),
+					RegPair::CY => write!(f, "an absolute indirect address through CY"),
+					RegPair::DZ => write!(f, "an absolute indirect address through DZ"),
+				},
+				Addr::Port(p) => write!(f, "a port address {}", p),
+				Addr::PortIndirect(ra) => match ra {
+					FullReg::A => write!(f, "a port indirect address through A"),
+					FullReg::B => write!(f, "a port indirect address through B"),
+					FullReg::C => write!(f, "a port indirect address through C"),
+					FullReg::D => write!(f, "a port indirect address through D"),
+				},
+				Addr::ZeroBank(zb) => write!(f, "a zero bank address {}", zb),
+				Addr::ZeroBankIndirect(ra) => match ra {
+					FullReg::A => write!(f, "a zero bank indirect address through A"),
+					FullReg::B => write!(f, "a zero bank indirect address through B"),
+					FullReg::C => write!(f, "a zero bank indirect address through C"),
+					FullReg::D => write!(f, "a zero bank indirect address through D"),
+				},
+				Addr::DirectPage(dp) => write!(f, "a direct page address {}", dp),
+				Addr::DirectPageIndirect(rw) => match rw {
+					ShortReg::W => write!(f, "a direct page indirect address through W"),
+					ShortReg::X => write!(f, "a direct page indirect address through X"),
+					ShortReg::Y => write!(f, "a direct page indirect address through Y"),
+					ShortReg::Z => write!(f, "a direct page indirect address through Z"),
+				},
+				Addr::Relative(ptr, offset) => match ptr {
+					Ptr::Instruction => write!(f, "an instruction pointer relative address {}", offset),
+					Ptr::Stack => write!(f, "a stack pointer relative address {}", offset),
+				},
+				Addr::RelativeIndirect(ptr, ra) => match ptr {
+					Ptr::Instruction => match ra {
+						FullReg::A => write!(f, "an instruction pointer relative indirect adderss through A"),
+						FullReg::B => write!(f, "an instruction pointer relative indirect adderss through B"),
+						FullReg::C => write!(f, "an instruction pointer relative indirect adderss through C"),
+						FullReg::D => write!(f, "an instruction pointer relative indirect adderss through D"),
+					},
+					Ptr::Stack => match ra {
+						FullReg::A => write!(f, "a stack pointer relative indirect address through A"),
+						FullReg::B => write!(f, "a stack pointer relative indirect address through B"),
+						FullReg::C => write!(f, "a stack pointer relative indirect address through C"),
+						FullReg::D => write!(f, "a stack pointer relative indirect address through D"),
+					},
+				},
+			},
+			TokenInner::Operator(op) => match op {
+				Op::Tilde => write!(f, "operator '~'"),
+				Op::Caret => write!(f, "operator '^'"),
+				Op::Ampersand => write!(f, "operator '&'"),
+				Op::Star => write!(f, "operator '*'"),
+				Op::Minus => write!(f, "operator '-'"),
+				Op::Equals => write!(f, "operator '='"),
+				Op::Plus => write!(f, "operator '+'"),
+				Op::Pipe => write!(f, "operator '|'"),
+				Op::Colon => write!(f, "operator ':'"),
+				Op::Less => write!(f, "operator '<'"),
+				Op::ShiftLeft => write!(f, "operator '<<'"),
+				Op::LessOrEqual => write!(f, "operator '<='"),
+				Op::Greater => write!(f, "operator '>'"),
+				Op::ShiftRight => write!(f, "operator '>>'"),
+				Op::GreaterOrEqual => write!(f, "operator '>='"),
+				Op::NotEquals => write!(f, "operator '<>'"),
+				Op::Slash => write!(f, "operator '/'"),
+			},
+			TokenInner::Keyword(word) => match word {
+				Word::Register(r) => match r {
+					Reg::Full(ra) => match ra {
+						FullReg::A => write!(f, "A register"),
+						FullReg::B => write!(f, "B register"),
+						FullReg::C => write!(f, "C register"),
+						FullReg::D => write!(f, "D register"),
+					},
+					Reg::Short(rw) => match rw {
+						ShortReg::W => write!(f, "W register"),
+						ShortReg::X => write!(f, "X register"),
+						ShortReg::Y => write!(f, "Y register"),
+						ShortReg::Z => write!(f, "Z register"),
+					},
+				},
+				Word::Directive(dir) => match dir {
+					Dir::SetOrigin => write!(f, "set origin directive"),
+					Dir::DefineSymbol => write!(f, "define symbol directive"),
+					Dir::DefineExternalSymbol => write!(f, "define external symbol directive"),
+					Dir::PutByte => write!(f, "put byte directive"),
+					Dir::PutWord => write!(f, "put word directive"),
+					Dir::PutAddress => write!(f, "put address directive"),
+					Dir::PutASCIIString => write!(f, "put ASCII string directive"),
+					Dir::PutNullTerminatedASCIIString => write!(f, "put null-terminated ASCII string directive"),
+					Dir::IncludeSourceFile => write!(f, "include source file directive"),
+					Dir::IncludeBinaryFile => write!(f, "include binary file directive"),
+					Dir::AssembleIf => write!(f, "assemble if directive"),
+					Dir::AssembleIfNot => write!(f, "assemble if not directive"),
+					Dir::AssembleIfDefined => write!(f, "assemble if defined directive"),
+					Dir::AssembleIfNotDefined => write!(f, "assemble if not defined directive"),
+					Dir::EndIf => write!(f, "end if directive"),
+					Dir::SelectLowByte => write!(f, "select low byte directive"),
+					Dir::SelectLowWord => write!(f, "select low word directive"),
+					Dir::SelectHighByte => write!(f, "select high byte directive"),
+					Dir::SelectBankByte => write!(f, "select bank byte directive"),
+				},
+				Word::Instruction(inst) => match inst {
+					Inst::NoOperation => write!(f, "no operation instruction"),
+					Inst::ClearZeroFlag => write!(f, "clear zero flag instruction"),
+					Inst::SetZeroFlag => write!(f, "set zero flag instruction"),
+					Inst::ClearCarryFlag => write!(f, "clear carry flag instruction"),
+					Inst::SetCarryFlag => write!(f, "set carry flag instruction"),
+					Inst::ClearHalfCarryFlag => write!(f, "clear half-carry flag instruction"),
+					Inst::SetHalfCarryFlag => write!(f, "set half-carry flag instruction"),
+					Inst::ClearOverflowFlag => write!(f, "clear overflow flag instruction"),
+					Inst::SetOverflowFlag => write!(f, "set overflow flag instruction"),
+					Inst::ClearNegativeFlag => write!(f, "clear negative flag instruction"),
+					Inst::SetNegativeFlag => write!(f, "set negative flag instruction"),
+					Inst::EnableInterrupts => write!(f, "enable interrupts instruction"),
+					Inst::DisableInterrupts => write!(f, "disable interrupts instruction"),
+					Inst::SetStackBank => write!(f, "set stack bank instruction"),
+					Inst::SetDirectPage => write!(f, "set direct page instruction"),
+					Inst::Swap => write!(f, "swap instruction"),
+					Inst::Load => write!(f, "load instruction"),
+					Inst::LoadZero => write!(f, "load zero instruction"),
+					Inst::Pull => write!(f, "pull instruction"),
+					Inst::Push => write!(f, "push instruction"),
+					Inst::PullFlags => write!(f, "pull flags instruction"),
+					Inst::PushFlags => write!(f, "push flags instruction"),
+					Inst::StoreStackPointer => write!(f, "store stack pointer instruction"),
+					Inst::LoadStackPointer => write!(f, "load stack pointer instruction"),
+					Inst::And => write!(f, "and instruction"),
+					Inst::BitTest => write!(f, "bit test instruction"),
+					Inst::Or => write!(f, "or instruction"),
+					Inst::ExclusiveOr => write!(f, "exclusive or instruction"),
+					Inst::VacancyCount => write!(f, "vacancy count instruction"),
+					Inst::PopulationCount => write!(f, "population count instruction"),
+					Inst::Not => write!(f, "not instruction"),
+					Inst::ShiftLeft => write!(f, "shift left instruction"),
+					Inst::RotateLeft => write!(f, "rotate left instruction"),
+					Inst::ShiftRight => write!(f, "shift right instruction"),
+					Inst::RotateRight => write!(f, "rotate right instruction"),
+					Inst::Add => write!(f, "add instruction"),
+					Inst::AddWithCarry => write!(f, "add with carry instruction"),
+					Inst::Subtract => write!(f, "subtract instruction"),
+					Inst::SubtractWithCarry => write!(f, "subtract with carry instruction"),
+					Inst::Compare => write!(f, "compare instruction"),
+					Inst::CompareWithCarry => write!(f, "compare with carry instruction"),
+					Inst::Decrement => write!(f, "decrement instruction"),
+					Inst::Increment => write!(f, "increment instruction"),
+					Inst::DecrementWithCarry => write!(f, "decrement with carry instruction"),
+					Inst::IncrementWithCarry => write!(f, "increment with carry instruction"),
+					Inst::DecimalAddAdjust => write!(f, "decimal add adjust instruction"),
+					Inst::DecimalSubtractAdjust => write!(f, "decimal subtract adjust instruction"),
+					Inst::Jump => write!(f, "jump instruction"),
+					Inst::JumpIfZero => write!(f, "jump if zero instruction"),
+					Inst::JumpIfNotZero => write!(f, "jump if not zero instruction"),
+					Inst::JumpIfCarry => write!(f, "jump if carry instruction"),
+					Inst::JumpIfBelow => write!(f, "jump if below instruction"),
+					Inst::JumpIfNotCarry => write!(f, "jump if not carry instruction"),
+					Inst::JumpIfAboveOrEqual => write!(f, "jump if above or equal instruction"),
+					Inst::JumpIfOverflow => write!(f, "jump if overflow instruction"),
+					Inst::JumpIfNotOverflow => write!(f, "jump if not overflow instruction"),
+					Inst::JumpIfPositive => write!(f, "jump if positive instruction"),
+					Inst::JumpIfNegative => write!(f, "jump if negative instruction"),
+					Inst::JumpIfBelowOrEqual => write!(f, "jump if below or equal instruction"),
+					Inst::JumpIfAbove => write!(f, "jump if above instruction"),
+					Inst::JumpIfLess => write!(f, "jump if less instruction"),
+					Inst::JumpIfLessOrEqual => write!(f, "jump if less or equal instruction"),
+					Inst::JumpIfGreaterOrEqual => write!(f, "jump if greater or equal instruction"),
+					Inst::JumpIfGreater => write!(f, "jump if greater instruction"),
+					Inst::CallSubroutine => write!(f, "call subroutine instruction"),
+					Inst::CallSubroutineIfZero => write!(f, "call subroutine if zero instruction"),
+					Inst::CallSubroutineIfNotZero => write!(f, "call subroutine if not zero instruction"),
+					Inst::CallSubroutineIfCarry => write!(f, "call subroutine if carry instruction"),
+					Inst::CallSubroutineIfBelow => write!(f, "call subroutine if below instruction"),
+					Inst::CallSubroutineIfNotCarry => write!(f, "call subroutine if not carry instruction"),
+					Inst::CallSubroutineIfAboveOrEqual => write!(f, "call subroutine if above or equal instruction"),
+					Inst::CallSubroutineIfOverflow => write!(f, "call subroutine if overflow instruction"),
+					Inst::CallSubroutineIfNotOverflow => write!(f, "call subroutine if not overflow instruction"),
+					Inst::CallSubroutineIfPositive => write!(f, "call subroutine if positive instruction"),
+					Inst::CallSubroutineIfNegative => write!(f, "call subroutine if negative instruction"),
+					Inst::CallSubroutineIfBelowOrEqual => write!(f, "call subroutine if below or equal instruction"),
+					Inst::CallSubroutineIfAbove => write!(f, "call subroutine if above instruction"),
+					Inst::CallSubroutineIfLess => write!(f, "call subroutine if less instruction"),
+					Inst::CallSubroutineIfLessOrEqual => write!(f, "call subroutine if less or equal instruction"),
+					Inst::CallSubroutineIfGreaterOrEqual => write!(f, "call subroutine if greater or equal instruction"),
+					Inst::CallSubroutineIfGreater => write!(f, "call subroutine if greater instruction"),
+					Inst::ReturnFromSubroutine => write!(f, "return from subroutine instruction"),
+					Inst::ReturnFromSubroutineIfZero => write!(f, "return from subroutine if zero instruction"),
+					Inst::ReturnFromSubroutineIfNotZero => write!(f, "return from subroutine if not zero instruction"),
+					Inst::ReturnFromSubroutineIfCarry => write!(f, "return from subroutine if carry instruction"),
+					Inst::ReturnFromSubroutineIfBelow => write!(f, "return from subroutine if below instruction"),
+					Inst::ReturnFromSubroutineIfNotCarry => write!(f, "return from subroutine if not carry instruction"),
+					Inst::ReturnFromSubroutineIfAboveOrEqual => write!(f, "return from subroutine if above or equal instruction"),
+					Inst::ReturnFromSubroutineIfOverflow => write!(f, "return from subroutine if overflow instruction"),
+					Inst::ReturnFromSubroutineIfNotOverflow => write!(f, "return from subroutine if not overflow instruction"),
+					Inst::ReturnFromSubroutineIfPositive => write!(f, "return from subroutine if positive instruction"),
+					Inst::ReturnFromSubroutineIfNegative => write!(f, "return from subroutine if negative instruction"),
+					Inst::ReturnFromSubroutineIfBelowOrEqual => write!(f, "return from subroutine if below or equal instruction"),
+					Inst::ReturnFromSubroutineIfAbove => write!(f, "return from subroutine if above instruction"),
+					Inst::ReturnFromSubroutineIfLess => write!(f, "return from subroutine if less instruction"),
+					Inst::ReturnFromSubroutineIfLessOrEqual => write!(f, "return from subroutine if less or equal instruction"),
+					Inst::ReturnFromSubroutineIfGreaterOrEqual => write!(f, "return from subroutine if greater or equal instruction"),
+					Inst::ReturnFromSubroutineIfGreater => write!(f, "return from subroutine if greater instruction"),
+					Inst::ReturnFromInterrupt => write!(f, "return from interrupt instruction"),
+					Inst::ReturnFromInterruptIfZero => write!(f, "return from interrupt if zero instruction"),
+					Inst::ReturnFromInterruptIfNotZero => write!(f, "return from interrupt if not zero instruction"),
+					Inst::ReturnFromInterruptIfCarry => write!(f, "return from interrupt if carry instruction"),
+					Inst::ReturnFromInterruptIfBelow => write!(f, "return from interrupt if below instruction"),
+					Inst::ReturnFromInterruptIfNotCarry => write!(f, "return from interrupt if not carry instruction"),
+					Inst::ReturnFromInterruptIfAboveOrEqual => write!(f, "return from interrupt if above or equal instruction"),
+					Inst::ReturnFromInterruptIfOverflow => write!(f, "return from interrupt if overflow instruction"),
+					Inst::ReturnFromInterruptIfNotOverflow => write!(f, "return from interrupt if not overflow instruction"),
+					Inst::ReturnFromInterruptIfPositive => write!(f, "return from interrupt if positive instruction"),
+					Inst::ReturnFromInterruptIfNegative => write!(f, "return from interrupt if negative instruction"),
+					Inst::ReturnFromInterruptIfBelowOrEqual => write!(f, "return from interrupt if below or equal instruction"),
+					Inst::ReturnFromInterruptIfAbove => write!(f, "return from interrupt if above instruction"),
+					Inst::ReturnFromInterruptIfLess => write!(f, "return from interrupt if less instruction"),
+					Inst::ReturnFromInterruptIfLessOrEqual => write!(f, "return from interrupt if less or equal instruction"),
+					Inst::ReturnFromInterruptIfGreaterOrEqual => write!(f, "return from interrupt if greater or equal instruction"),
+					Inst::ReturnFromInterruptIfGreater => write!(f, "return from interrupt if greater instruction"),
+					Inst::Break => write!(f, "break instruction"),
+					Inst::DispatchInterruptTable => write!(f, "dispatch interrupt table instruction"),
+					Inst::WaitForInterrupt => write!(f, "wait for interrupt instruction"),
+					Inst::Halt => write!(f, "halt instruction"),
+				},
+				Word::Identifier(ident) => write!(f, "an identifier '{}'", ident)
+			},
+			TokenInner::Newline => write!(f, "a newline"),
+			TokenInner::Error => write!(f, "an error"),
+		}
 	}
 }
 
@@ -621,6 +877,7 @@ impl Addr {
 impl Op {
 	pub fn new(l: &mut Lexer<TokenInner>) -> Op {
 		match l.slice() {
+			"~" => Op::Tilde,
 			"^" => Op::Caret,
 			"&" => Op::Ampersand,
 			"*" => Op::Star,
@@ -629,8 +886,11 @@ impl Op {
 			"+" => Op::Plus,
 			"|" => Op::Pipe,
 			":" => Op::Colon,
-			"<" => Op::LeftAngle,
-			">" => Op::RightAngle,
+			"<<" => Op::ShiftLeft,
+			"<>" => Op::NotEquals,
+			"<" => Op::Less,
+			">" => Op::Greater,
+			">>" => Op::ShiftRight,
 			"/" => Op::Slash,
 			_ => unreachable!()
 		}

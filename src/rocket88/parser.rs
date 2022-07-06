@@ -5,10 +5,15 @@ use std::{
 	path::PathBuf,
 };
 
+use crate::{
+	Error,
+	ErrorList,
+};
+
 use super::lexer::{
 	Token,
-	TokenInner,
 	TokenStream,
+	TokenInner,
 	Addr,
 	Op,
 	Word,
@@ -17,30 +22,18 @@ use super::lexer::{
 	Inst,
 };
 
-use crate::{
-	Error,
-	ErrorList,
-};
-
 //--> Type Aliases <--
 
-pub type Result = std::result::Result<(FileTree, ErrorList), ErrorList>;
+pub(crate) type Result = std::result::Result<(FileTree, ErrorList), ErrorList>;
 
 //--> Structs <--
 
-pub struct FileTree {
-	pub path: PathBuf,
-	pub contents: HashMap<usize, SyntaxNode>,
-}
+pub(crate) struct FileTree {}
 
-pub struct SyntaxNode {
-	pub source: Token,
-	pub lefthand: Option<Box<SyntaxNode>>,
-	pub righthand: Option<Box<SyntaxNode>>,
-}
+pub(crate) struct SyntaxNode {}
 
 //--> Functions <--
 
 impl FileTree {
-	pub fn new(verbose: bool, path: PathBuf, source: TokenStream) -> Result {}
+	pub fn new(verbose: bool, path: PathBuf, file_source: TokenStream) -> Result {}
 }

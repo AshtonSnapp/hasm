@@ -12,6 +12,8 @@ fn ascii_to_byte(c: char) -> Option<u8> {
 	} else { None }
 }
 
+pub fn byte_to_ascii(b: u8) -> Option<char> { char::from_u32(b as u32) }
+
 pub fn make_ascii_string(s: &str) -> Option<ASCIIString> {
 	let mut char_stack = s.chars().rev().collect::<Vec<char>>();
 

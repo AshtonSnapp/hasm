@@ -1,6 +1,7 @@
 //--> Imports <--
 
 mod lexer;
+mod parser;
 
 use std::{
 	collections::HashMap,
@@ -14,6 +15,7 @@ use super::{
 };
 
 use lexer::TokenStream;
+use parser::FileTree;
 
 //--> Constants <--
 
@@ -32,12 +34,27 @@ pub(crate) fn assemble(verbose: bool, listing_path: Option<PathBuf>, output_path
 	for input_file_path in input_file_paths {
 		match lexer::lex(verbose, input_file_path.clone()) {
 			Ok(tokens) => { tokenized_files.insert(input_file_path, tokens); },
-			Err(mut file_errs) => { errs.append(&mut file_errs); }
+			Err(mut lex_errs) => { errs.append(&mut lex_errs); }
 		}
 	}
 
 	// If we encountered errors in lexing, we want to return early so we don't generate even more errors.
 	if !errs.is_empty() { return Err((ARCH, errs)) }
+
+	let mut parsed_files: Vec<FileTree> = Vec::new();
+
+	for (path, source) in tokenized_files {
+		match FileTree::new(verbose, path.clone(), source) {
+			Ok((parsed, mut warns)) => {
+				parsed_files.push(parsed);
+				errs.append(&mut warns);
+			},
+			Err(mut parse_errs) => errs.append(&mut parse_errs)
+		}
+	}
+
+	// If we encountered errors in parsing, we want to return early so we don't generate even more errors.
+	if !errs.is_empty() && errs.iter().any(|e| !e.is_warning) { return Err((ARCH, errs)) }
 
 	if errs.is_empty() | errs.iter().all(|e| e.is_warning) { Ok((ARCH, errs)) } else { Err((ARCH, errs)) }
 }
