@@ -102,7 +102,7 @@ fn main() {
 				.value_parser(clap::value_parser!(PathBuf))
 				.required(true)
 				.multiple_values(true)
-				.help("Paths to source files, and directories that can be searched for them. At least one path must point to a file, and all must exist.")
+				.help("Paths to source files. All must exist.")
 			}
 		])
 		.get_matches()
@@ -122,11 +122,8 @@ fn main() {
 	// This is a required argument, so unwrapping is okay here.
 	let input_paths = args.get_many::<PathBuf>("infiles").unwrap().map(|p| p.clone()).collect::<Vec<PathBuf>>();
 
-	if !input_paths.iter().all(|p| p.exists()) {
-		eprintln!("ERR: All paths given as inputs must exist.");
-		process::exit(1);
-	} else if !input_paths.iter().any(|p| p.is_file()) {
-		eprintln!("ERR: At least one path given as an input must point to a file.");
+	if !input_paths.iter().all(|p| p.is_file()) {
+		eprintln!("ERR: All paths given as inputs must point to existing files.");
 		process::exit(1);
 	}
 

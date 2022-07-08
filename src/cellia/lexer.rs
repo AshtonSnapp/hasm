@@ -43,13 +43,13 @@ pub struct Token {
 
 #[derive(Clone, Logos)]
 pub enum TokenInner {
-	#[regex(r"#[0-9][_0-9]", Imm::decimal)]
-	#[regex(r"#%[01][_01]", Imm::binary)]
-	#[regex(r"#0(b|B)[01][_01]", Imm::binary)]
-	#[regex(r"#[01][_01](b|B)", Imm::binary)]
-	#[regex(r"#\$[0-9a-fA-F][_0-9a-fA-F]", Imm::hexadecimal)]
-	#[regex(r"#0(x|X)[0-9a-fA-F][_0-9a-fA-F]", Imm::hexadecimal)]
-	#[regex(r"#[0-9a-fA-F][_0-9a-fA-F](h|H)", Imm::hexadecimal)]
+	#[regex(r"[0-9][_0-9]", Imm::decimal)]
+	#[regex(r"%[01][_01]", Imm::binary)]
+	#[regex(r"0(b|B)[01][_01]", Imm::binary)]
+	#[regex(r"[01][_01](b|B)", Imm::binary)]
+	#[regex(r"\$[0-9a-fA-F][_0-9a-fA-F]", Imm::hexadecimal)]
+	#[regex(r"0(x|X)[0-9a-fA-F][_0-9a-fA-F]", Imm::hexadecimal)]
+	#[regex(r"[0-9a-fA-F][_0-9a-fA-F](h|H)", Imm::hexadecimal)]
 	#[regex(r"'([\x00-\x7F]+|\\')'", Imm::character)]
 	Immediate(Imm),
 
@@ -60,38 +60,30 @@ pub enum TokenInner {
 	#[regex(r"@[\u{0}-\u{10FFFE}\u{10FFFF}]*", TokenInner::path)]
 	Path(PathBuf),
 
-	#[regex(r"[0-9][_0-9]", Addr::decimal)]
-	#[regex(r"[0-9][_0-9](p|P)", Addr::decimal)]
 	#[regex(r"\([0-9][_0-9]\)", Addr::decimal)]
-	#[regex(r"(i|I|s|S)(p|P)[+-][0-9][_0-9]", Addr::decimal)]
-	#[regex(r"%[01][_01]", Addr::binary)]
-	#[regex(r"%[01][_01](p|P)", Addr::binary)]
+	#[regex(r"\([0-9][_0-9][pP]\)", Addr::decimal)]
+	#[regex(r"\([iI][pP][+-][0-9][_0-9]\)", Addr::decimal)]
 	#[regex(r"\(%[01][_01]\)", Addr::binary)]
-	#[regex(r"(i|I|s|S)(p|P)[+-]%[01][_01]", Addr::binary)]
-	#[regex(r"0(b|B)[01][_01]", Addr::binary)]
-	#[regex(r"0(b|B)[01][_01](p|P)", Addr::binary)]
-	#[regex(r"\(0(b|B)[01][_01]\)", Addr::binary)]
-	#[regex(r"(i|I|s|S)(p|P)[+-]0(b|B)[01][_01]", Addr::binary)]
-	#[regex(r"[01][_01](b|B)", Addr::binary)]
-	#[regex(r"[01][_01](b|B)(p|P)", Addr::binary)]
-	#[regex(r"\([01][_01](b|B)\)", Addr::binary)]
-	#[regex(r"(i|I|s|S)(p|P)[+-][01][_01](b|B)", Addr::binary)]
-	#[regex(r"\$[0-9a-fA-F][_0-9a-fA-F]", Addr::hexadecimal)]
-	#[regex(r"\$[0-9a-fA-F][_0-9a-fA-F](p|P)", Addr::hexadecimal)]
+	#[regex(r"\(%[01][_01][pP]\)", Addr::binary)]
+	#[regex(r"\([iI][pP][+-]%[01][_01]\)", Addr::binary)]
+	#[regex(r"\(0[bB][01][_01]\)", Addr::binary)]
+	#[regex(r"\(0[bB][01][_01][pP]\)", Addr::binary)]
+	#[regex(r"\([iI][pP][+-]0[bB][01][_01]\)", Addr::binary)]
+	#[regex(r"\([01][_01][bB]\)", Addr::binary)]
+	#[regex(r"\([01][_01][bB][pP]\)", Addr::binary)]
+	#[regex(r"\([iI][pP][+-][01][_01][bB]\)", Addr::binary)]
 	#[regex(r"\(\$[0-9a-fA-F][_0-9a-fA-F]\)", Addr::hexadecimal)]
-	#[regex(r"(i|I|s|S)(p|P)[+-]\$[0-9a-fA-F][_0-9a-fA-F]", Addr::hexadecimal)]
-	#[regex(r"0(x|X)[0-9a-fA-F][_0-9a-fA-F]", Addr::hexadecimal)]
-	#[regex(r"0(x|X)[0-9a-fA-F][_0-9a-fA-F](p|P)", Addr::hexadecimal)]
-	#[regex(r"\(0(x|X)[0-9a-fA-F][_0-9a-fA-F]\)", Addr::hexadecimal)]
-	#[regex(r"(i|I|s|S)(p|P)[+-]0(x|X)[0-9a-fA-F][_0-9a-fA-F]", Addr::hexadecimal)]
-	#[regex(r"[0-9a-fA-F][_0-9a-fA-F](h|H)", Addr::hexadecimal)]
-	#[regex(r"[0-9a-fA-F][_0-9a-fA-F](h|H)(p|P)", Addr::hexadecimal)]
-	#[regex(r"\([0-9a-fA-F][_0-9a-fA-F](h|H)\)", Addr::hexadecimal)]
-	#[regex(r"(i|I|s|S)(p|P)[+-][0-9a-fA-F][_0-9a-fA-F](h|H)", Addr::hexadecimal)]
-	#[regex(r"\[[abcdwxyzABCDWXYZ]\]", Addr::indirect)]
-	#[regex(r"\[[abcdABCD]\](p|P)", Addr::indirect)]
-	#[regex(r"\[[abcdABCD][wxyzWXYZ]\]", Addr::indirect)]
-	#[regex(r"(i|I|s|S)(p|P)\+[abcdABCD]", Addr::indirect)]
+	#[regex(r"\(\$[0-9a-fA-F][_0-9a-fA-F][pP]\)", Addr::hexadecimal)]
+	#[regex(r"\([iI][pP][+-]\$[0-9a-fA-F][_0-9a-fA-F]\)", Addr::hexadecimal)]
+	#[regex(r"\(0[xX][0-9a-fA-F][_0-9a-fA-F]\)", Addr::hexadecimal)]
+	#[regex(r"\(0[xX][0-9a-fA-F][_0-9a-fA-F][pP]\)", Addr::hexadecimal)]
+	#[regex(r"\([iI][pP][+-]0[xX][0-9a-fA-F][_0-9a-fA-F]\)", Addr::hexadecimal)]
+	#[regex(r"\([0-9a-fA-F][_0-9a-fA-F][hH]\)", Addr::hexadecimal)]
+	#[regex(r"\([0-9a-fA-F][_0-9a-fA-F][hH][pP]\)", Addr::hexadecimal)]
+	#[regex(r"\([iI][pP][+-][0-9a-fA-F][_0-9a-fA-F][hH]\)", Addr::hexadecimal)]
+	#[regex(r"\([abcdefghABCDEFGH]\)", Addr::indirect)]
+	#[regex(r"\([abcdefghABCDEFGH][stuvwxyzSTUVWXYZ]\)", Addr::indirect)]
+	#[regex(r"\([iI][pP]+[abcdefghABCDEFGH]\)", Addr::indirect)]
 	Address(Addr),
 
 	#[regex(r"[~\^&*-=\+|:<>/]+", Op::new)]
@@ -116,22 +108,12 @@ pub enum Imm {
 
 #[derive(Clone)]
 pub enum Addr {
-	Absolute(u32),
-	Port(u16),
-	ZeroBank(u16),
-	DirectPage(u8),
-	Relative(Ptr, i16),
-	AbsoluteIndirect(RegPair),
-	PortIndirect(FullReg),
-	ZeroBankIndirect(FullReg),
-	DirectPageIndirect(ShortReg),
-	RelativeIndirect(Ptr, FullReg),
-}
-
-#[derive(Clone)]
-pub enum Ptr {
-	Instruction,
-	Stack
+	Direct(u32),
+	Indirect(RegPair),
+	DirectPort(u16),
+	IndirectPort(FullReg),
+	DirectRelative(i16),
+	IndirectRelative(FullReg),
 }
 
 #[derive(Clone)]
@@ -171,10 +153,14 @@ pub enum Reg {
 
 #[derive(Clone)]
 pub enum RegPair {
-	AW,
-	BX,
-	CY,
-	DZ
+	AS,
+	BT,
+	CU,
+	DV,
+	EW,
+	FX,
+	GY,
+	HZ
 }
 
 #[derive(Clone)]
@@ -182,11 +168,19 @@ pub enum FullReg {
 	A,
 	B,
 	C,
-	D
+	D,
+	E,
+	F,
+	G,
+	H,
 }
 
 #[derive(Clone)]
 pub enum ShortReg {
+	S,
+	T,
+	U,
+	V,
 	W,
 	X,
 	Y,
@@ -231,8 +225,6 @@ pub enum Inst {
 	SetNegativeFlag,
 	EnableInterrupts,
 	DisableInterrupts,
-	SetStackBank,
-	SetDirectPage,
 	Swap,
 	Load,
 	LoadZero,
@@ -240,14 +232,10 @@ pub enum Inst {
 	Push,
 	PullFlags,
 	PushFlags,
-	StoreStackPointer,
-	LoadStackPointer,
 	And,
 	BitTest,
 	Or,
 	ExclusiveOr,
-	VacancyCount,
-	PopulationCount,
 	Not,
 	ShiftLeft,
 	RotateLeft,
@@ -261,8 +249,6 @@ pub enum Inst {
 	CompareWithCarry,
 	Decrement,
 	Increment,
-	DecrementWithCarry,
-	IncrementWithCarry,
 	DecimalAddAdjust,
 	DecimalSubtractAdjust,
 	Jump,
@@ -336,6 +322,7 @@ pub enum Inst {
 	Break,
 	DispatchInterruptTable,
 	WaitForInterrupt,
+	Reset,
 	Halt,
 }
 
@@ -403,51 +390,38 @@ impl fmt::Display for Token {
 			},
 			TokenInner::Path(path) => write!(f, "a path to '{}'", path.display()),
 			TokenInner::Address(addr) => match addr {
-				Addr::Absolute(a) => write!(f, "an absolute address {}", a),
-				Addr::AbsoluteIndirect(rp) => match rp {
-					RegPair::AW => write!(f, "an absolute indirect address through AW"),
-					RegPair::BX => write!(f, "an absolute indirect address through BX"),
-					RegPair::CY => write!(f, "an absolute indirect address through CY"),
-					RegPair::DZ => write!(f, "an absolute indirect address through DZ"),
+				Addr::Direct(a) => write!(f, "a direct address {}", a),
+				Addr::Indirect(rp) => match rp {
+					RegPair::AS => write!(f, "an indirect address through AS"),
+					RegPair::BT => write!(f, "an indirect address through BT"),
+					RegPair::CU => write!(f, "an indirect address through CU"),
+					RegPair::DV => write!(f, "an indirect address through DV"),
+					RegPair::EW => write!(f, "an indirect address through EW"),
+					RegPair::FX => write!(f, "an indirect address through FX"),
+					RegPair::GY => write!(f, "an indirect address through GY"),
+					RegPair::HZ => write!(f, "an indirect address through HZ"),
 				},
-				Addr::Port(p) => write!(f, "a port address {}", p),
-				Addr::PortIndirect(ra) => match ra {
-					FullReg::A => write!(f, "a port indirect address through A"),
-					FullReg::B => write!(f, "a port indirect address through B"),
-					FullReg::C => write!(f, "a port indirect address through C"),
-					FullReg::D => write!(f, "a port indirect address through D"),
+				Addr::DirectPort(p) => write!(f, "a port address {}", p),
+				Addr::IndirectPort(ra) => match ra {
+					FullReg::A => write!(f, "an indirect port address through A"),
+					FullReg::B => write!(f, "an indirect port address through B"),
+					FullReg::C => write!(f, "an indirect port address through C"),
+					FullReg::D => write!(f, "an indirect port address through D"),
+					FullReg::E => write!(f, "an indirect port address through E"),
+					FullReg::F => write!(f, "an indirect port address through F"),
+					FullReg::G => write!(f, "an indirect port address through G"),
+					FullReg::H => write!(f, "an indirect port address through H"),
 				},
-				Addr::ZeroBank(zb) => write!(f, "a zero bank address {}", zb),
-				Addr::ZeroBankIndirect(ra) => match ra {
-					FullReg::A => write!(f, "a zero bank indirect address through A"),
-					FullReg::B => write!(f, "a zero bank indirect address through B"),
-					FullReg::C => write!(f, "a zero bank indirect address through C"),
-					FullReg::D => write!(f, "a zero bank indirect address through D"),
-				},
-				Addr::DirectPage(dp) => write!(f, "a direct page address {}", dp),
-				Addr::DirectPageIndirect(rw) => match rw {
-					ShortReg::W => write!(f, "a direct page indirect address through W"),
-					ShortReg::X => write!(f, "a direct page indirect address through X"),
-					ShortReg::Y => write!(f, "a direct page indirect address through Y"),
-					ShortReg::Z => write!(f, "a direct page indirect address through Z"),
-				},
-				Addr::Relative(ptr, offset) => match ptr {
-					Ptr::Instruction => write!(f, "an instruction pointer relative address {}", offset),
-					Ptr::Stack => write!(f, "a stack pointer relative address {}", offset),
-				},
-				Addr::RelativeIndirect(ptr, ra) => match ptr {
-					Ptr::Instruction => match ra {
-						FullReg::A => write!(f, "an instruction pointer relative indirect adderss through A"),
-						FullReg::B => write!(f, "an instruction pointer relative indirect adderss through B"),
-						FullReg::C => write!(f, "an instruction pointer relative indirect adderss through C"),
-						FullReg::D => write!(f, "an instruction pointer relative indirect adderss through D"),
-					},
-					Ptr::Stack => match ra {
-						FullReg::A => write!(f, "a stack pointer relative indirect address through A"),
-						FullReg::B => write!(f, "a stack pointer relative indirect address through B"),
-						FullReg::C => write!(f, "a stack pointer relative indirect address through C"),
-						FullReg::D => write!(f, "a stack pointer relative indirect address through D"),
-					},
+				Addr::DirectRelative(offset) => write!(f, "a relative address {}", offset),
+				Addr::IndirectRelative(ra) => match ra {
+					FullReg::A => write!(f, "an indirect relative address through A"),
+					FullReg::B => write!(f, "an indirect relative address through B"),
+					FullReg::C => write!(f, "an indirect relative address through C"),
+					FullReg::D => write!(f, "an indirect relative address through D"),
+					FullReg::E => write!(f, "an indirect relative address through E"),
+					FullReg::F => write!(f, "an indirect relative address through F"),
+					FullReg::G => write!(f, "an indirect relative address through G"),
+					FullReg::H => write!(f, "an indirect relative address through H"),
 				},
 			},
 			TokenInner::Operator(op) => match op {
@@ -476,8 +450,16 @@ impl fmt::Display for Token {
 						FullReg::B => write!(f, "B register"),
 						FullReg::C => write!(f, "C register"),
 						FullReg::D => write!(f, "D register"),
+						FullReg::E => write!(f, "E register"),
+						FullReg::F => write!(f, "F register"),
+						FullReg::G => write!(f, "G register"),
+						FullReg::H => write!(f, "H register"),
 					},
 					Reg::Short(rw) => match rw {
+						ShortReg::S => write!(f, "S register"),
+						ShortReg::T => write!(f, "T register"),
+						ShortReg::U => write!(f, "U register"),
+						ShortReg::V => write!(f, "V register"),
 						ShortReg::W => write!(f, "W register"),
 						ShortReg::X => write!(f, "X register"),
 						ShortReg::Y => write!(f, "Y register"),
@@ -519,8 +501,6 @@ impl fmt::Display for Token {
 					Inst::SetNegativeFlag => write!(f, "set negative flag instruction"),
 					Inst::EnableInterrupts => write!(f, "enable interrupts instruction"),
 					Inst::DisableInterrupts => write!(f, "disable interrupts instruction"),
-					Inst::SetStackBank => write!(f, "set stack bank instruction"),
-					Inst::SetDirectPage => write!(f, "set direct page instruction"),
 					Inst::Swap => write!(f, "swap instruction"),
 					Inst::Load => write!(f, "load instruction"),
 					Inst::LoadZero => write!(f, "load zero instruction"),
@@ -528,14 +508,10 @@ impl fmt::Display for Token {
 					Inst::Push => write!(f, "push instruction"),
 					Inst::PullFlags => write!(f, "pull flags instruction"),
 					Inst::PushFlags => write!(f, "push flags instruction"),
-					Inst::StoreStackPointer => write!(f, "store stack pointer instruction"),
-					Inst::LoadStackPointer => write!(f, "load stack pointer instruction"),
 					Inst::And => write!(f, "and instruction"),
 					Inst::BitTest => write!(f, "bit test instruction"),
 					Inst::Or => write!(f, "or instruction"),
 					Inst::ExclusiveOr => write!(f, "exclusive or instruction"),
-					Inst::VacancyCount => write!(f, "vacancy count instruction"),
-					Inst::PopulationCount => write!(f, "population count instruction"),
 					Inst::Not => write!(f, "not instruction"),
 					Inst::ShiftLeft => write!(f, "shift left instruction"),
 					Inst::RotateLeft => write!(f, "rotate left instruction"),
@@ -549,8 +525,6 @@ impl fmt::Display for Token {
 					Inst::CompareWithCarry => write!(f, "compare with carry instruction"),
 					Inst::Decrement => write!(f, "decrement instruction"),
 					Inst::Increment => write!(f, "increment instruction"),
-					Inst::DecrementWithCarry => write!(f, "decrement with carry instruction"),
-					Inst::IncrementWithCarry => write!(f, "increment with carry instruction"),
 					Inst::DecimalAddAdjust => write!(f, "decimal add adjust instruction"),
 					Inst::DecimalSubtractAdjust => write!(f, "decimal subtract adjust instruction"),
 					Inst::Jump => write!(f, "jump instruction"),
@@ -624,6 +598,7 @@ impl fmt::Display for Token {
 					Inst::Break => write!(f, "break instruction"),
 					Inst::DispatchInterruptTable => write!(f, "dispatch interrupt table instruction"),
 					Inst::WaitForInterrupt => write!(f, "wait for interrupt instruction"),
+					Inst::Reset => write!(f, "reset instruction"),
 					Inst::Halt => write!(f, "halt instruction"),
 				},
 				Word::Identifier(ident) => write!(f, "an identifier '{}'", ident)
@@ -656,7 +631,7 @@ impl TokenInner {
 
 impl Imm {
 	pub fn binary(l: &mut Lexer<TokenInner>) -> Option<Imm> {
-		let mut slice = l.slice().strip_prefix('#')?.to_lowercase();
+		let mut slice = l.slice().to_lowercase();
 
 		if let Some(s) = slice.strip_prefix('%') { slice = String::from(s); }
 		else if let Some(s) = slice.strip_prefix("0b") { slice = String::from(s); }
@@ -669,7 +644,7 @@ impl Imm {
 	}
 
 	pub fn decimal(l: &mut Lexer<TokenInner>) -> Option<Imm> {
-		let slice = l.slice().strip_prefix('#')?;
+		let slice = l.slice();
 
 		if let Ok(b) = u8::from_str_radix(slice, 10) { Some(Imm::Byte(b)) }
 		else if let Ok(w) = u16::from_str_radix(slice, 10) { Some(Imm::Word(w)) }
@@ -677,7 +652,7 @@ impl Imm {
 	}
 
 	pub fn hexadecimal(l: &mut Lexer<TokenInner>) -> Option<Imm> {
-		let mut slice = l.slice().strip_prefix('#')?.to_lowercase();
+		let mut slice = l.slice().to_lowercase();
 
 		if let Some(s) = slice.strip_prefix('$') { slice = String::from(s); }
 		else if let Some(s) = slice.strip_prefix("0x") { slice = String::from(s); }
@@ -697,7 +672,7 @@ impl Imm {
 }
 
 impl Addr {
-	fn try_strip_binary(slice: String) -> Option<String> {
+	fn try_strip_binary(slice: &String) -> Option<String> {
 		if let Some(s) = slice.strip_prefix('%') { Some(String::from(s)) }
 		else if let Some(s) = slice.strip_prefix("0b") { Some(String::from(s)) }
 		else if let Some(s) = slice.strip_suffix("b") { Some(String::from(s)) }
@@ -705,71 +680,75 @@ impl Addr {
 	}
 
 	pub fn binary(l: &mut Lexer<TokenInner>) -> Option<Addr> {
-		let mut slice = l.slice().to_lowercase();
+		let mut slice = l.slice().strip_prefix('(')?.strip_suffix(')')?.to_lowercase();
 
-		if slice.starts_with("ip") || slice.starts_with("sp") {
-			// relative addressing
-			let pointer = if slice.starts_with("ip") { Ptr::Instruction } else { Ptr::Stack };
+		if let Some(s) = slice.strip_suffix('p') {
+			// Port
+			slice = Addr::try_strip_binary(&String::from(s))?;
 
-			if let Some(s) = slice.strip_prefix("ip") { slice = String::from(s); } else if let Some(s) = slice.strip_prefix("sp") { slice = String::from(s); }
+			if let Ok(p) = u16::from_str_radix(&slice, 2) {
+				Some(Addr::DirectPort(p))
+			} else { None }
+		} else if let Some(s) = slice.strip_prefix("ip") {
+			// Relative
+			slice = String::from(s);
 
-			let negative = slice.starts_with('-');
+			let negative = if let Some(s) = slice.strip_prefix('-') {
+				slice = Addr::try_strip_binary(&String::from(s))?;
+				true
+			} else if let Some(s) = slice.strip_prefix('+') {
+				slice = Addr::try_strip_binary(&String::from(s))?;
+				false
+			} else { return None };
 
-			if let Some(s) = slice.strip_prefix('-') { slice = Addr::try_strip_binary(String::from(s))?; } else if let Some(s) = slice.strip_prefix('+') { slice = Addr::try_strip_binary(String::from(s))?; }
-
-			if let Ok(offset) = i16::from_str_radix(&slice, 2) { Some(Addr::Relative(pointer, if negative { -offset } else { offset })) } else { None }
-		} else if slice.starts_with('(') && slice.ends_with(')') {
-			// direct page addressing
-			slice = Addr::try_strip_binary(String::from(slice.strip_prefix('(')?.strip_suffix(')')?))?;
-
-			if let Ok(dp) = u8::from_str_radix(&slice, 2) { Some(Addr::DirectPage(dp)) } else { None }
-		} else if slice.ends_with('p') {
-			// port addressing
-			slice = Addr::try_strip_binary(String::from(slice.strip_suffix('p')?))?;
-
-			if let Ok(p) = u16::from_str_radix(&slice, 2) { Some(Addr::Port(p)) } else { None }
+			if let Ok(offset) = i16::from_str_radix(&slice, 2) {
+				Some(Addr::DirectRelative(if negative { -offset } else { offset }))
+			} else { None }
 		} else {
-			// absolute or zero bank addressing
-			slice = Addr::try_strip_binary(slice)?;
+			// Standard
+			slice = Addr::try_strip_binary(&slice)?;
 
-			if let Ok(zb) = u16::from_str_radix(&slice, 2) { Some(Addr::ZeroBank(zb)) }
-			else if let Ok(a) = u32::from_str_radix(&slice, 2) {
-				if a <= 0xFFFFFF { Some(Addr::Absolute(a)) } else { None }
+			if let Ok(a) = u32::from_str_radix(&slice, 2) {
+				if a <= 0xFFFFFF { Some(Addr::Direct(a)) } else { None }
 			} else { None }
 		}
 	}
 
 	pub fn decimal(l: &mut Lexer<TokenInner>) -> Option<Addr> {
-		let mut slice = l.slice().to_lowercase();
+		let mut slice = l.slice().strip_prefix('(')?.strip_suffix(')')?.to_lowercase();
 
-		if slice.starts_with("ip") || slice.starts_with("sp") {
-			// relative addressing
-			let pointer = if slice.starts_with("ip") { Ptr::Instruction } else { Ptr::Stack };
+		if let Some(s) = slice.strip_suffix('p') {
+			// Port
+			slice = String::from(s);
 
-			if let Some(s) = slice.strip_prefix("ip") { slice = String::from(s); } else if let Some(s) = slice.strip_prefix("sp") { slice = String::from(s); }
+			if let Ok(p) = u16::from_str_radix(&slice, 10) {
+				Some(Addr::DirectPort(p))
+			} else { None }
+		} else if let Some(s) = slice.strip_prefix("ip") {
+			// Relative
+			slice = String::from(s);
 
-			if let Ok(offset) = i16::from_str_radix(&slice, 10) { Some(Addr::Relative(pointer, offset)) } else { None }
-		} else if slice.starts_with('(') && slice.ends_with(')') {
-			// direct page addressing
-			slice = String::from(slice.strip_prefix('(')?.strip_suffix(')')?);
+			let negative = if let Some(s) = slice.strip_prefix('-') {
+				slice = String::from(s);
+				true
+			} else if let Some(s) = slice.strip_prefix('+') {
+				slice = String::from(s);
+				false
+			} else { return None };
 
-			if let Ok(dp) = u8::from_str_radix(&slice, 10) { Some(Addr::DirectPage(dp)) } else { None }
-		} else if slice.ends_with('p') {
-			// port addressing
-			slice = String::from(slice.strip_suffix('p')?);
-
-			if let Ok(p) = u16::from_str_radix(&slice, 10) { Some(Addr::Port(p)) } else { None }
+			if let Ok(offset) = i16::from_str_radix(&slice, 10) {
+				Some(Addr::DirectRelative(if negative { -offset } else { offset }))
+			} else { None }
 		} else {
-			// absolute or zero bank addressing
+			// Standard
 
-			if let Ok(zb) = u16::from_str_radix(&slice, 10) { Some(Addr::ZeroBank(zb)) }
-			else if let Ok(a) = u32::from_str_radix(&slice, 10) {
-				if a <= 0xFFFFFF { Some(Addr::Absolute(a)) } else { None }
+			if let Ok(a) = u32::from_str_radix(&slice, 10) {
+				if a <= 0xFFFFFF { Some(Addr::Direct(a)) } else { None }
 			} else { None }
 		}
 	}
 
-	fn try_strip_hexadecimal(slice: String) -> Option<String> {
+	fn try_strip_hexadecimal(slice: &String) -> Option<String> {
 		if let Some(s) = slice.strip_prefix('$') { Some(String::from(s)) }
 		else if let Some(s) = slice.strip_prefix("0x") { Some(String::from(s)) }
 		else if let Some(s) = slice.strip_suffix("h") { Some(String::from(s)) }
@@ -777,100 +756,88 @@ impl Addr {
 	}
 	
 	pub fn hexadecimal(l: &mut Lexer<TokenInner>) -> Option<Addr> {
-		let mut slice = l.slice().to_lowercase();
+		let mut slice = l.slice().strip_prefix('(')?.strip_suffix(')')?.to_lowercase();
 
-		if slice.starts_with("ip") || slice.starts_with("sp") {
-			// relative addressing
-			let pointer = if slice.starts_with("ip") { Ptr::Instruction } else { Ptr::Stack };
+		if let Some(s) = slice.strip_suffix('p') {
+			// Port
+			slice = Addr::try_strip_hexadecimal(&String::from(s))?;
 
-			if let Some(s) = slice.strip_prefix("ip") { slice = String::from(s); } else if let Some(s) = slice.strip_prefix("sp") { slice = String::from(s); }
+			if let Ok(p) = u16::from_str_radix(&slice, 16) {
+				Some(Addr::DirectPort(p))
+			} else { None }
+		} else if let Some(s) = slice.strip_prefix("ip") {
+			// Relative
+			slice = String::from(s);
 
-			let negative = slice.starts_with('-');
+			let negative = if let Some(s) = slice.strip_prefix('-') {
+				slice = Addr::try_strip_hexadecimal(&String::from(s))?;
+				true
+			} else if let Some(s) = slice.strip_prefix('+') {
+				slice = Addr::try_strip_hexadecimal(&String::from(s))?;
+				false
+			} else { return None };
 
-			if let Some(s) = slice.strip_prefix('-') { slice = Addr::try_strip_hexadecimal(String::from(s))?; } else if let Some(s) = slice.strip_prefix('+') { slice = Addr::try_strip_hexadecimal(String::from(s))?; }
-
-			if let Ok(offset) = i16::from_str_radix(&slice, 16) { Some(Addr::Relative(pointer, if negative { -offset } else { offset })) } else { None }
-		} else if slice.starts_with('(') && slice.ends_with(')') {
-			// direct page addressing
-			slice = Addr::try_strip_hexadecimal(String::from(slice.strip_prefix('(')?.strip_suffix(')')?))?;
-
-			if let Ok(dp) = u8::from_str_radix(&slice, 16) { Some(Addr::DirectPage(dp)) } else { None }
-		} else if slice.ends_with('p') {
-			// port addressing
-			slice = Addr::try_strip_hexadecimal(String::from(slice.strip_suffix('p')?))?;
-
-			if let Ok(p) = u16::from_str_radix(&slice, 16) { Some(Addr::Port(p)) } else { None }
+			if let Ok(offset) = i16::from_str_radix(&slice, 16) {
+				Some(Addr::DirectRelative(if negative { -offset } else { offset }))
+			} else { None }
 		} else {
-			// absolute or zero bank addressing
-			slice = Addr::try_strip_hexadecimal(slice)?;
+			// Standard
+			slice = Addr::try_strip_hexadecimal(&slice)?;
 
-			if let Ok(zb) = u16::from_str_radix(&slice, 16) { Some(Addr::ZeroBank(zb)) }
-			else if let Ok(a) = u32::from_str_radix(&slice, 16) {
-				if a <= 0xFFFFFF { Some(Addr::Absolute(a)) } else { None }
+			if let Ok(a) = u32::from_str_radix(&slice, 16) {
+				if a <= 0xFFFFFF { Some(Addr::Direct(a)) } else { None }
 			} else { None }
 		}
 	}
 
 	pub fn indirect(l: &mut Lexer<TokenInner>) -> Option<Addr> {
-		let mut slice = l.slice().to_lowercase();
+		let mut slice = l.slice().strip_prefix('(')?.strip_suffix(')')?.to_lowercase();
 
-		if let Some(s) = slice.strip_prefix('[') {
-			slice = String::from(s);
-
-			if let Some(s) = slice.strip_suffix(']') {
-				// absolute, zero bank, or direct page
-				slice = String::from(s);
-
-				match slice.as_str() {
-					"aw" => Some(Addr::AbsoluteIndirect(RegPair::AW)),
-					"bx" => Some(Addr::AbsoluteIndirect(RegPair::BX)),
-					"cy" => Some(Addr::AbsoluteIndirect(RegPair::CY)),
-					"dz" => Some(Addr::AbsoluteIndirect(RegPair::DZ)),
-					"a" => Some(Addr::ZeroBankIndirect(FullReg::A)),
-					"b" => Some(Addr::ZeroBankIndirect(FullReg::B)),
-					"c" => Some(Addr::ZeroBankIndirect(FullReg::C)),
-					"d" => Some(Addr::ZeroBankIndirect(FullReg::D)),
-					"w" => Some(Addr::DirectPageIndirect(ShortReg::W)),
-					"x" => Some(Addr::DirectPageIndirect(ShortReg::X)),
-					"y" => Some(Addr::DirectPageIndirect(ShortReg::Y)),
-					"z" => Some(Addr::DirectPageIndirect(ShortReg::Z)),
-					_ => None
-				}
-			} else if let Some(s) = slice.strip_suffix("]p") {
-				// port
-				slice = String::from(s);
-
-				match slice.as_str() {
-					"a" => Some(Addr::PortIndirect(FullReg::A)),
-					"b" => Some(Addr::PortIndirect(FullReg::B)),
-					"c" => Some(Addr::PortIndirect(FullReg::C)),
-					"d" => Some(Addr::PortIndirect(FullReg::D)),
-					_ => None
-				}
-			} else { None }
-		} else if let Some(s) = slice.strip_prefix("ip+") {
-			// IP relative
+		if let Some(s) = slice.strip_suffix('p') {
+			// Port
 			slice = String::from(s);
 
 			match slice.as_str() {
-				"a" => Some(Addr::RelativeIndirect(Ptr::Instruction, FullReg::A)),
-				"b" => Some(Addr::RelativeIndirect(Ptr::Instruction, FullReg::B)),
-				"c" => Some(Addr::RelativeIndirect(Ptr::Instruction, FullReg::C)),
-				"d" => Some(Addr::RelativeIndirect(Ptr::Instruction, FullReg::D)),
+				"a" => Some(Addr::IndirectPort(FullReg::A)),
+				"b" => Some(Addr::IndirectPort(FullReg::B)),
+				"c" => Some(Addr::IndirectPort(FullReg::C)),
+				"d" => Some(Addr::IndirectPort(FullReg::D)),
+				"e" => Some(Addr::IndirectPort(FullReg::E)),
+				"f" => Some(Addr::IndirectPort(FullReg::F)),
+				"g" => Some(Addr::IndirectPort(FullReg::G)),
+				"h" => Some(Addr::IndirectPort(FullReg::H)),
 				_ => None
 			}
-		} else if let Some(s) = slice.strip_prefix("sp+") {
-			// SP relative
-			slice = String::from(s);
+		} else if let Some(s) = slice.strip_prefix("ip") {
+			// Relative
+			slice = String::from(s.strip_prefix('+')?);
 
 			match slice.as_str() {
-				"a" => Some(Addr::RelativeIndirect(Ptr::Stack, FullReg::A)),
-				"b" => Some(Addr::RelativeIndirect(Ptr::Stack, FullReg::B)),
-				"c" => Some(Addr::RelativeIndirect(Ptr::Stack, FullReg::C)),
-				"d" => Some(Addr::RelativeIndirect(Ptr::Stack, FullReg::D)),
+				"a" => Some(Addr::IndirectRelative(FullReg::A)),
+				"b" => Some(Addr::IndirectRelative(FullReg::B)),
+				"c" => Some(Addr::IndirectRelative(FullReg::C)),
+				"d" => Some(Addr::IndirectRelative(FullReg::D)),
+				"e" => Some(Addr::IndirectRelative(FullReg::E)),
+				"f" => Some(Addr::IndirectRelative(FullReg::F)),
+				"g" => Some(Addr::IndirectRelative(FullReg::G)),
+				"h" => Some(Addr::IndirectRelative(FullReg::H)),
 				_ => None
 			}
-		} else { None }
+		} else {
+			// Standard
+
+			match slice.as_str() {
+				"as" => Some(Addr::Indirect(RegPair::AS)),
+				"bt" => Some(Addr::Indirect(RegPair::BT)),
+				"cu" => Some(Addr::Indirect(RegPair::CU)),
+				"dv" => Some(Addr::Indirect(RegPair::DV)),
+				"ew" => Some(Addr::Indirect(RegPair::EW)),
+				"fx" => Some(Addr::Indirect(RegPair::FX)),
+				"gy" => Some(Addr::Indirect(RegPair::GY)),
+				"hz" => Some(Addr::Indirect(RegPair::HZ)),
+				_ => None
+			}
+		}
 	}
 }
 
@@ -889,7 +856,9 @@ impl Op {
 			"<<" => Op::ShiftLeft,
 			"<>" => Op::NotEquals,
 			"<" => Op::Less,
+			"<=" => Op::LessOrEqual,
 			">" => Op::Greater,
+			">=" => Op::GreaterOrEqual,
 			">>" => Op::ShiftRight,
 			"/" => Op::Slash,
 			_ => unreachable!()
@@ -946,8 +915,6 @@ impl Word {
 				"sen" => Word::Instruction(Inst::SetNegativeFlag),
 				"ei" => Word::Instruction(Inst::EnableInterrupts),
 				"di" => Word::Instruction(Inst::DisableInterrupts),
-				"sesb" => Word::Instruction(Inst::SetStackBank),
-				"sedp" => Word::Instruction(Inst::SetDirectPage),
 				"swp" => Word::Instruction(Inst::Swap),
 				"ld" => Word::Instruction(Inst::Load),
 				"ldz" => Word::Instruction(Inst::LoadZero),
@@ -955,14 +922,10 @@ impl Word {
 				"ph" => Word::Instruction(Inst::Push),
 				"plf" => Word::Instruction(Inst::PullFlags),
 				"phf" => Word::Instruction(Inst::PushFlags),
-				"ssp" => Word::Instruction(Inst::StoreStackPointer),
-				"lsp" => Word::Instruction(Inst::LoadStackPointer),
 				"and" => Word::Instruction(Inst::And),
 				"bit" => Word::Instruction(Inst::BitTest),
 				"or" => Word::Instruction(Inst::Or),
 				"eor" => Word::Instruction(Inst::ExclusiveOr),
-				"vcn" => Word::Instruction(Inst::VacancyCount),
-				"pcn" => Word::Instruction(Inst::PopulationCount),
 				"not" => Word::Instruction(Inst::Not),
 				"shl" => Word::Instruction(Inst::ShiftLeft),
 				"rol" => Word::Instruction(Inst::RotateLeft),
@@ -976,8 +939,6 @@ impl Word {
 				"cpc" => Word::Instruction(Inst::CompareWithCarry),
 				"de" => Word::Instruction(Inst::Decrement),
 				"in" => Word::Instruction(Inst::Increment),
-				"dec" => Word::Instruction(Inst::DecrementWithCarry),
-				"inc" => Word::Instruction(Inst::IncrementWithCarry),
 				"daa" => Word::Instruction(Inst::DecimalAddAdjust),
 				"dsa" => Word::Instruction(Inst::DecimalSubtractAdjust),
 				"jmp" => Word::Instruction(Inst::Jump),
@@ -1051,11 +1012,20 @@ impl Word {
 				"brk" => Word::Instruction(Inst::Break),
 				"dit" => Word::Instruction(Inst::DispatchInterruptTable),
 				"wait" => Word::Instruction(Inst::WaitForInterrupt),
+				"res" => Word::Instruction(Inst::Reset),
 				"halt" => Word::Instruction(Inst::Halt),
 				"a" => Word::Register(Reg::Full(FullReg::A)),
 				"b" => Word::Register(Reg::Full(FullReg::B)),
 				"c" => Word::Register(Reg::Full(FullReg::C)),
 				"d" => Word::Register(Reg::Full(FullReg::D)),
+				"e" => Word::Register(Reg::Full(FullReg::E)),
+				"f" => Word::Register(Reg::Full(FullReg::F)),
+				"g" => Word::Register(Reg::Full(FullReg::G)),
+				"h" => Word::Register(Reg::Full(FullReg::H)),
+				"s" => Word::Register(Reg::Short(ShortReg::S)),
+				"t" => Word::Register(Reg::Short(ShortReg::T)),
+				"u" => Word::Register(Reg::Short(ShortReg::U)),
+				"v" => Word::Register(Reg::Short(ShortReg::V)),
 				"w" => Word::Register(Reg::Short(ShortReg::W)),
 				"x" => Word::Register(Reg::Short(ShortReg::X)),
 				"y" => Word::Register(Reg::Short(ShortReg::Y)),

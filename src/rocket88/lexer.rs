@@ -1,6 +1,7 @@
 //--> Imports <--
 
 use std::{
+	fmt,
 	fs::File,
 	io::{
 		BufRead,
@@ -92,6 +93,7 @@ pub enum Addr {
 
 #[derive(Clone)]
 pub enum Op {
+	Tilde,
 	Caret,
 	Ampersand,
 	Star,
@@ -100,8 +102,13 @@ pub enum Op {
 	Plus,
 	Pipe,
 	Colon,
-	LeftAngle,
-	RightAngle,
+	Less,
+	LessOrEqual,
+	Greater,
+	GreaterOrEqual,
+	ShiftLeft,
+	ShiftRight,
+	NotEquals,
 	Slash
 }
 
@@ -273,8 +280,163 @@ impl Token {
 	}
 }
 
+impl fmt::Display for Token {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match &self.inner {
+			TokenInner::Immediate(b) => write!(f, "an immediate {}", b),
+			TokenInner::String(lit) => {
+				let mut display = String::new();
+
+				for b in lit {
+					display.push(text::byte_to_ascii(*b).ok_or(fmt::Error)?);
+				}
+
+				write!(f, "a string literal \"{}\"", display)
+			},
+			TokenInner::Path(path) => write!(f, "a path to '{}'", path.display()),
+			TokenInner::Address(addr) => match addr {
+				Addr::Regular(a) => write!(f, "an address {}", a),
+				Addr::Pointer => write!(f, "an indirect address through BC"),
+				Addr::ShadowPointer => write!(f, "an indirect address through DD"),
+			},
+			TokenInner::Operator(op) => match op {
+				Op::Tilde => write!(f, "operator '~'"),
+				Op::Caret => write!(f, "operator '^'"),
+				Op::Ampersand => write!(f, "operator '&'"),
+				Op::Star => write!(f, "operator '*'"),
+				Op::Minus => write!(f, "operator '-'"),
+				Op::Equals => write!(f, "operator '='"),
+				Op::Plus => write!(f, "operator '+'"),
+				Op::Pipe => write!(f, "operator '|'"),
+				Op::Colon => write!(f, "operator ':'"),
+				Op::Less => write!(f, "operator '<'"),
+				Op::ShiftLeft => write!(f, "operator '<<'"),
+				Op::LessOrEqual => write!(f, "operator '<='"),
+				Op::Greater => write!(f, "operator '>'"),
+				Op::ShiftRight => write!(f, "operator '>>'"),
+				Op::GreaterOrEqual => write!(f, "operator '>='"),
+				Op::NotEquals => write!(f, "operator '<>'"),
+				Op::Slash => write!(f, "operator '/'"),
+			},
+			TokenInner::Keyword(word) => match word {
+				Word::Register(r) => match r {
+					Reg::A => write!(f, "A register"),
+					Reg::B => write!(f, "B register"),
+					Reg::C => write!(f, "C register"),
+					Reg::PairBC => write!(f, "BC register pair"),
+					Reg::ShadowDD => write!(f, "DD shadow register"),
+					Reg::ShadowEE => write!(f, "EE shadow register"),
+				},
+				Word::Directive(dir) => match dir {
+					Dir::SetOrigin => write!(f, "set origin directive"),
+					Dir::DefineSymbol => write!(f, "define symbol directive"),
+					Dir::DefineExternalSymbol => write!(f, "define external symbol directive"),
+					Dir::PutByte => write!(f, "put byte directive"),
+					Dir::PutWord => write!(f, "put word directive"),
+					Dir::PutASCIIString => write!(f, "put ASCII string directive"),
+					Dir::PutNullTerminatedASCIIString => write!(f, "put null-terminated ASCII string directive"),
+					Dir::IncludeSourceFile => write!(f, "include source file directive"),
+					Dir::IncludeBinaryFile => write!(f, "include binary file directive"),
+					Dir::AssembleIf => write!(f, "assemble if directive"),
+					Dir::AssembleIfNot => write!(f, "assemble if not directive"),
+					Dir::AssembleIfDefined => write!(f, "assemble if defined directive"),
+					Dir::AssembleIfNotDefined => write!(f, "assemble if not defined directive"),
+					Dir::EndIf => write!(f, "end if directive"),
+					Dir::SelectLowByte => write!(f, "select low byte directive"),
+					Dir::SelectHighByte => write!(f, "select high byte directive"),
+				},
+				Word::Instruction(inst) => match inst {
+					Inst::NoOperation => write!(f, "no operation instruction"),
+					Inst::LoadAZero => write!(f, "load A with zero instruction"),
+					Inst::LoadA => write!(f, "load A instruction"),
+					Inst::PullA => write!(f, "pull A instruction"),
+					Inst::CompareA => write!(f, "compare A instruction"),
+					Inst::StoreA => write!(f, "store A instruction"),
+					Inst::PushA => write!(f, "push A instruction"),
+					Inst::LoadBZero => write!(f, "load B with zero instruction"),
+					Inst::LoadB => write!(f, "load B instruction"),
+					Inst::PullB => write!(f, "pull B instruction"),
+					Inst::CompareB => write!(f, "compare B instruction"),
+					Inst::StoreB => write!(f, "store B instruction"),
+					Inst::PushB => write!(f, "push B instruction"),
+					Inst::LoadCZero => write!(f, "load C with zero instruction"),
+					Inst::LoadC => write!(f, "load C instruction"),
+					Inst::PullC => write!(f, "pull C instruction"),
+					Inst::CompareC => write!(f, "compare C instruction"),
+					Inst::StoreC => write!(f, "store C instruction"),
+					Inst::PushC => write!(f, "push C instruction"),
+					Inst::ExchangeD => write!(f, "exchange BC and DD instruction"),
+					Inst::JumpRelative => write!(f, "jump relative instruction"),
+					Inst::Jump => write!(f, "jump instruction"),
+					Inst::ExchangeE => write!(f, "exchange BC and EE instruction"),
+					Inst::JumpSubroutineRelative => write!(f, "jump relative to subroutine instruction"),
+					Inst::JumpSubroutine => write!(f, "jump to subroutine instruction"),
+					Inst::JumpNotZero => write!(f, "jump relative if not zero instruction"),
+					Inst::JumpZero => write!(f, "jump if zero instruction"),
+					Inst::JumpSubroutineNotZero => write!(f, "jump relative to subroutine if not zero instruction"),
+					Inst::JumpSubroutineZero => write!(f, "jump to subroutine if zero instruction"),
+					Inst::JumpPositive => write!(f, "jump relative if positive instruction"),
+					Inst::JumpNegative => write!(f, "jump if negative instruction"),
+					Inst::JumpSubroutinePositive => write!(f, "jump relative to subroutine if positive instruction"),
+					Inst::JumpSubroutineNegative => write!(f, "jump to subroutine if negative instruction"),
+					Inst::JumpNotCarry => write!(f, "jump relative if not carry instruction"),
+					Inst::JumpCarry => write!(f, "jump if carry instruction"),
+					Inst::JumpSubroutineNotCarry => write!(f, "jump relative to subroutine if not carry instruction"),
+					Inst::JumpSubroutineCarry => write!(f, "jump to subroutine if carry instruction"),
+					Inst::AddZero => write!(f, "add zero instruction"),
+					Inst::Add => write!(f, "add instruction"),
+					Inst::Increment => write!(f, "increment instruction"),
+					Inst::AddZeroWithCarry => write!(f, "add zero with carry instruction"),
+					Inst::AddWithCarry => write!(f, "add with cary instruction"),
+					Inst::SubtractZero => write!(f, "subtract zero instruction"),
+					Inst::Subtract => write!(f, "subtract instruction"),
+					Inst::SubtractZeroWithCarry => write!(f, "subtract zero with carry instruction"),
+					Inst::SubtractWithCarry => write!(f, "subtract with carry instruction"),
+					Inst::Decrement => write!(f, "decrement instruction"),
+					Inst::LogicalShiftRight => write!(f, "logical shift right instruction"),
+					Inst::RotateRight => write!(f, "rotate right instruction"),
+					Inst::ArithmeticShiftLeft => write!(f, "arithmetic shift left instruction"),
+					Inst::Negate => write!(f, "negate instruction"),
+					Inst::RotateLeft => write!(f, "rotate left instruction"),
+					Inst::OrZero => write!(f, "or zero instruction"),
+					Inst::Or => write!(f, "or instruction"),
+					Inst::Invert => write!(f, "invert instruction"),
+					Inst::NotOrZero => write!(f, "not or zero instruction"),
+					Inst::NotOr => write!(f, "not or instruction"),
+					Inst::AndZero => write!(f, "and zero instruction"),
+					Inst::And => write!(f, "and instruction"),
+					Inst::SetDecimal => write!(f, "set decimal instruction"),
+					Inst::NotAndZero => write!(f, "not and zero instruction"),
+					Inst::NotAnd => write!(f, "not and instruction"),
+					Inst::ClearDecimal => write!(f, "clear decimal instruction"),
+					Inst::ExclusiveOrZero => write!(f, "exclusive or zero instruction"),
+					Inst::ExclusiveOr => write!(f, "exclusive or instruction"),
+					Inst::PushProcessor => write!(f, "push processor instruction"),
+					Inst::ExclusiveNotOrZero => write!(f, "exclusive not or zero instruction"),
+					Inst::ExclusiveNotOr => write!(f, "exclusive not or instruction"),
+					Inst::PullProcessor => write!(f, "pull processor instruction"),
+					Inst::SetInterrupt => write!(f, "set interrupt instruction"),
+					Inst::ClearInterrupt => write!(f, "clear interrupt instruction"),
+					Inst::ReturnFromSubroutine => write!(f, "return from subroutine instruction"),
+					Inst::ReturnFromInterrupt => write!(f, "return from interrupt instruction"),
+					Inst::Halt => write!(f, "halt instruction"),
+					Inst::Break => write!(f, "break instruction"),
+					Inst::Reset => write!(f, "reset instruction"),
+					Inst::LoadStackPointer => write!(f, "load stack pointer instruction"),
+					Inst::LoadBCWithStackPointer => write!(f, "load BC with stack pointer instruction"),
+					Inst::ClearCarry => write!(f, "clear carry instruction"),
+					Inst::SetCarry => write!(f, "set carry instruction"),
+				},
+				Word::Identifier(ident) => write!(f, "an identifier '{}'", ident)
+			},
+			TokenInner::Newline => write!(f, "a newline"),
+			TokenInner::Error => write!(f, "an error"),
+		}
+	}
+}
+
 impl TokenInner {
-	pub fn binary(l: &mut Lexer<TokenInner>) -> Option<u8> {
+	fn binary(l: &mut Lexer<TokenInner>) -> Option<u8> {
 		let mut slice = l.slice().strip_prefix('#')?.to_lowercase();
 
 		if let Some(s) = slice.strip_prefix('%') { slice = String::from(s); }
@@ -286,14 +448,14 @@ impl TokenInner {
 		else { None }
 	}
 
-	pub fn decimal(l: &mut Lexer<TokenInner>) -> Option<u8> {
+	fn decimal(l: &mut Lexer<TokenInner>) -> Option<u8> {
 		let slice = l.slice().strip_prefix('#')?;
 
 		if let Ok(b) = u8::from_str_radix(slice, 10) { Some(b) }
 		else { None }
 	}
 
-	pub fn hexadecimal(l: &mut Lexer<TokenInner>) -> Option<u8> {
+	fn hexadecimal(l: &mut Lexer<TokenInner>) -> Option<u8> {
 		let mut slice = l.slice().strip_prefix('#')?.to_lowercase();
 
 		if let Some(s) = slice.strip_prefix('$') { slice = String::from(s); }
@@ -305,7 +467,7 @@ impl TokenInner {
 		else { None }
 	}
 
-	pub fn character(l: &mut Lexer<TokenInner>) -> Option<u8> {
+	fn character(l: &mut Lexer<TokenInner>) -> Option<u8> {
 		let s = l.slice().strip_prefix("'")?.strip_suffix("'")?;
 
 		Some(text::make_ascii_character(s)?)
@@ -373,6 +535,7 @@ impl Addr {
 impl Op {
 	pub fn new(l: &mut Lexer<TokenInner>) -> Op {
 		match l.slice() {
+			"~" => Op::Tilde,
 			"^" => Op::Caret,
 			"&" => Op::Ampersand,
 			"*" => Op::Star,
@@ -381,8 +544,13 @@ impl Op {
 			"+" => Op::Plus,
 			"|" => Op::Pipe,
 			":" => Op::Colon,
-			"<" => Op::LeftAngle,
-			">" => Op::RightAngle,
+			"<<" => Op::ShiftLeft,
+			"<>" => Op::NotEquals,
+			"<" => Op::Less,
+			"<=" => Op::LessOrEqual,
+			">" => Op::Greater,
+			">=" => Op::GreaterOrEqual,
+			">>" => Op::ShiftRight,
 			"/" => Op::Slash,
 			_ => unreachable!()
 		}
