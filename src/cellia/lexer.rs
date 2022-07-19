@@ -62,28 +62,27 @@ pub enum TokenInner {
 
 	#[regex(r"\([0-9][_0-9]\)", Addr::decimal)]
 	#[regex(r"\([0-9][_0-9][pP]\)", Addr::decimal)]
-	#[regex(r"\([iI][pP][+-][0-9][_0-9]\)", Addr::decimal)]
+	#[regex(r"\([pP][cC][+-][0-9][_0-9]\)", Addr::decimal)]
 	#[regex(r"\(%[01][_01]\)", Addr::binary)]
 	#[regex(r"\(%[01][_01][pP]\)", Addr::binary)]
-	#[regex(r"\([iI][pP][+-]%[01][_01]\)", Addr::binary)]
+	#[regex(r"\([pP][cC][+-]%[01][_01]\)", Addr::binary)]
 	#[regex(r"\(0[bB][01][_01]\)", Addr::binary)]
 	#[regex(r"\(0[bB][01][_01][pP]\)", Addr::binary)]
-	#[regex(r"\([iI][pP][+-]0[bB][01][_01]\)", Addr::binary)]
+	#[regex(r"\([pP][cC][+-]0[bB][01][_01]\)", Addr::binary)]
 	#[regex(r"\([01][_01][bB]\)", Addr::binary)]
 	#[regex(r"\([01][_01][bB][pP]\)", Addr::binary)]
-	#[regex(r"\([iI][pP][+-][01][_01][bB]\)", Addr::binary)]
+	#[regex(r"\([pP][cC][+-][01][_01][bB]\)", Addr::binary)]
 	#[regex(r"\(\$[0-9a-fA-F][_0-9a-fA-F]\)", Addr::hexadecimal)]
 	#[regex(r"\(\$[0-9a-fA-F][_0-9a-fA-F][pP]\)", Addr::hexadecimal)]
-	#[regex(r"\([iI][pP][+-]\$[0-9a-fA-F][_0-9a-fA-F]\)", Addr::hexadecimal)]
+	#[regex(r"\([pP][cC][+-]\$[0-9a-fA-F][_0-9a-fA-F]\)", Addr::hexadecimal)]
 	#[regex(r"\(0[xX][0-9a-fA-F][_0-9a-fA-F]\)", Addr::hexadecimal)]
 	#[regex(r"\(0[xX][0-9a-fA-F][_0-9a-fA-F][pP]\)", Addr::hexadecimal)]
-	#[regex(r"\([iI][pP][+-]0[xX][0-9a-fA-F][_0-9a-fA-F]\)", Addr::hexadecimal)]
+	#[regex(r"\([pP][cC][+-]0[xX][0-9a-fA-F][_0-9a-fA-F]\)", Addr::hexadecimal)]
 	#[regex(r"\([0-9a-fA-F][_0-9a-fA-F][hH]\)", Addr::hexadecimal)]
 	#[regex(r"\([0-9a-fA-F][_0-9a-fA-F][hH][pP]\)", Addr::hexadecimal)]
-	#[regex(r"\([iI][pP][+-][0-9a-fA-F][_0-9a-fA-F][hH]\)", Addr::hexadecimal)]
-	#[regex(r"\([abcdefghABCDEFGH]\)", Addr::indirect)]
-	#[regex(r"\([abcdefghABCDEFGH][stuvwxyzSTUVWXYZ]\)", Addr::indirect)]
-	#[regex(r"\([iI][pP]+[abcdefghABCDEFGH]\)", Addr::indirect)]
+	#[regex(r"\([pP][cC][+-][0-9a-fA-F][_0-9a-fA-F][hH]\)", Addr::hexadecimal)]
+	#[regex(r"\([rR][pP]?[0-7]\)", Addr::indirect)]
+	#[regex(r"\([pP][cC]+[rR][0-7]\)", Addr::indirect)]
 	Address(Addr),
 
 	#[regex(r"[~\^&*-=\+|:<>/]+", Op::new)]
@@ -153,38 +152,38 @@ pub enum Reg {
 
 #[derive(Clone)]
 pub enum RegPair {
-	AS,
-	BT,
-	CU,
-	DV,
-	EW,
-	FX,
-	GY,
-	HZ
+	RP0,
+	RP1,
+	RP2,
+	RP3,
+	RP4,
+	RP5,
+	RP6,
+	RP7
 }
 
 #[derive(Clone)]
 pub enum FullReg {
-	A,
-	B,
-	C,
-	D,
-	E,
-	F,
-	G,
-	H,
+	R0,
+	R1,
+	R2,
+	R3,
+	R4,
+	R5,
+	R6,
+	R7,
 }
 
 #[derive(Clone)]
 pub enum ShortReg {
-	S,
-	T,
-	U,
-	V,
-	W,
-	X,
-	Y,
-	Z
+	SR0,
+	SR1,
+	SR2,
+	SR3,
+	SR4,
+	SR5,
+	SR6,
+	SR7
 }
 
 #[derive(Clone)]
@@ -217,17 +216,15 @@ pub enum Inst {
 	SetZeroFlag,
 	ClearCarryFlag,
 	SetCarryFlag,
-	ClearHalfCarryFlag,
-	SetHalfCarryFlag,
+	ClearAdjustFlag,
+	SetAdjustFlag,
 	ClearOverflowFlag,
 	SetOverflowFlag,
 	ClearNegativeFlag,
 	SetNegativeFlag,
 	EnableInterrupts,
 	DisableInterrupts,
-	Swap,
 	Load,
-	LoadZero,
 	Pull,
 	Push,
 	PullFlags,
@@ -285,40 +282,23 @@ pub enum Inst {
 	CallSubroutineIfLessOrEqual,
 	CallSubroutineIfGreaterOrEqual,
 	CallSubroutineIfGreater,
-	ReturnFromSubroutine,
-	ReturnFromSubroutineIfZero,
-	ReturnFromSubroutineIfNotZero,
-	ReturnFromSubroutineIfCarry,
-	ReturnFromSubroutineIfBelow,
-	ReturnFromSubroutineIfNotCarry,
-	ReturnFromSubroutineIfAboveOrEqual,
-	ReturnFromSubroutineIfOverflow,
-	ReturnFromSubroutineIfNotOverflow,
-	ReturnFromSubroutineIfPositive,
-	ReturnFromSubroutineIfNegative,
-	ReturnFromSubroutineIfBelowOrEqual,
-	ReturnFromSubroutineIfAbove,
-	ReturnFromSubroutineIfLess,
-	ReturnFromSubroutineIfLessOrEqual,
-	ReturnFromSubroutineIfGreaterOrEqual,
-	ReturnFromSubroutineIfGreater,
-	ReturnFromInterrupt,
-	ReturnFromInterruptIfZero,
-	ReturnFromInterruptIfNotZero,
-	ReturnFromInterruptIfCarry,
-	ReturnFromInterruptIfBelow,
-	ReturnFromInterruptIfNotCarry,
-	ReturnFromInterruptIfAboveOrEqual,
-	ReturnFromInterruptIfOverflow,
-	ReturnFromInterruptIfNotOverflow,
-	ReturnFromInterruptIfPositive,
-	ReturnFromInterruptIfNegative,
-	ReturnFromInterruptIfBelowOrEqual,
-	ReturnFromInterruptIfAbove,
-	ReturnFromInterruptIfLess,
-	ReturnFromInterruptIfLessOrEqual,
-	ReturnFromInterruptIfGreaterOrEqual,
-	ReturnFromInterruptIfGreater,
+	Return,
+	ReturnIfZero,
+	ReturnIfNotZero,
+	ReturnIfCarry,
+	ReturnIfBelow,
+	ReturnIfNotCarry,
+	ReturnIfAboveOrEqual,
+	ReturnIfOverflow,
+	ReturnIfNotOverflow,
+	ReturnIfPositive,
+	ReturnIfNegative,
+	ReturnIfBelowOrEqual,
+	ReturnIfAbove,
+	ReturnIfLess,
+	ReturnIfLessOrEqual,
+	ReturnIfGreaterOrEqual,
+	ReturnIfGreater,
 	Break,
 	DispatchInterruptTable,
 	WaitForInterrupt,
@@ -392,36 +372,36 @@ impl fmt::Display for Token {
 			TokenInner::Address(addr) => match addr {
 				Addr::Direct(a) => write!(f, "a direct address {}", a),
 				Addr::Indirect(rp) => match rp {
-					RegPair::AS => write!(f, "an indirect address through AS"),
-					RegPair::BT => write!(f, "an indirect address through BT"),
-					RegPair::CU => write!(f, "an indirect address through CU"),
-					RegPair::DV => write!(f, "an indirect address through DV"),
-					RegPair::EW => write!(f, "an indirect address through EW"),
-					RegPair::FX => write!(f, "an indirect address through FX"),
-					RegPair::GY => write!(f, "an indirect address through GY"),
-					RegPair::HZ => write!(f, "an indirect address through HZ"),
+					RegPair::RP0 => write!(f, "an indirect address through register pair 0"),
+					RegPair::RP1 => write!(f, "an indirect address through register pair 1"),
+					RegPair::RP2 => write!(f, "an indirect address through register pair 2"),
+					RegPair::RP3 => write!(f, "an indirect address through register pair 3"),
+					RegPair::RP4 => write!(f, "an indirect address through register pair 4"),
+					RegPair::RP5 => write!(f, "an indirect address through register pair 5"),
+					RegPair::RP6 => write!(f, "an indirect address through register pair 6"),
+					RegPair::RP7 => write!(f, "an indirect address through register pair 7"),
 				},
 				Addr::DirectPort(p) => write!(f, "a port address {}", p),
 				Addr::IndirectPort(ra) => match ra {
-					FullReg::A => write!(f, "an indirect port address through A"),
-					FullReg::B => write!(f, "an indirect port address through B"),
-					FullReg::C => write!(f, "an indirect port address through C"),
-					FullReg::D => write!(f, "an indirect port address through D"),
-					FullReg::E => write!(f, "an indirect port address through E"),
-					FullReg::F => write!(f, "an indirect port address through F"),
-					FullReg::G => write!(f, "an indirect port address through G"),
-					FullReg::H => write!(f, "an indirect port address through H"),
+					FullReg::R0 => write!(f, "an indirect port address through register 0"),
+					FullReg::R1 => write!(f, "an indirect port address through register 1"),
+					FullReg::R2 => write!(f, "an indirect port address through register 2"),
+					FullReg::R3 => write!(f, "an indirect port address through register 3"),
+					FullReg::R4 => write!(f, "an indirect port address through register 4"),
+					FullReg::R5 => write!(f, "an indirect port address through register 5"),
+					FullReg::R6 => write!(f, "an indirect port address through register 6"),
+					FullReg::R7 => write!(f, "an indirect port address through register 7"),
 				},
 				Addr::DirectRelative(offset) => write!(f, "a relative address {}", offset),
 				Addr::IndirectRelative(ra) => match ra {
-					FullReg::A => write!(f, "an indirect relative address through A"),
-					FullReg::B => write!(f, "an indirect relative address through B"),
-					FullReg::C => write!(f, "an indirect relative address through C"),
-					FullReg::D => write!(f, "an indirect relative address through D"),
-					FullReg::E => write!(f, "an indirect relative address through E"),
-					FullReg::F => write!(f, "an indirect relative address through F"),
-					FullReg::G => write!(f, "an indirect relative address through G"),
-					FullReg::H => write!(f, "an indirect relative address through H"),
+					FullReg::R0 => write!(f, "an indirect relative address through register 0"),
+					FullReg::R1 => write!(f, "an indirect relative address through register 1"),
+					FullReg::R2 => write!(f, "an indirect relative address through register 2"),
+					FullReg::R3 => write!(f, "an indirect relative address through register 3"),
+					FullReg::R4 => write!(f, "an indirect relative address through register 4"),
+					FullReg::R5 => write!(f, "an indirect relative address through register 5"),
+					FullReg::R6 => write!(f, "an indirect relative address through register 6"),
+					FullReg::R7 => write!(f, "an indirect relative address through register 7"),
 				},
 			},
 			TokenInner::Operator(op) => match op {
@@ -446,24 +426,24 @@ impl fmt::Display for Token {
 			TokenInner::Keyword(word) => match word {
 				Word::Register(r) => match r {
 					Reg::Full(ra) => match ra {
-						FullReg::A => write!(f, "A register"),
-						FullReg::B => write!(f, "B register"),
-						FullReg::C => write!(f, "C register"),
-						FullReg::D => write!(f, "D register"),
-						FullReg::E => write!(f, "E register"),
-						FullReg::F => write!(f, "F register"),
-						FullReg::G => write!(f, "G register"),
-						FullReg::H => write!(f, "H register"),
+						FullReg::R0 => write!(f, "register 0"),
+						FullReg::R1 => write!(f, "register 1"),
+						FullReg::R2 => write!(f, "register 2"),
+						FullReg::R3 => write!(f, "register 3"),
+						FullReg::R4 => write!(f, "register 4"),
+						FullReg::R5 => write!(f, "register 5"),
+						FullReg::R6 => write!(f, "register 6"),
+						FullReg::R7 => write!(f, "register 7"),
 					},
 					Reg::Short(rw) => match rw {
-						ShortReg::S => write!(f, "S register"),
-						ShortReg::T => write!(f, "T register"),
-						ShortReg::U => write!(f, "U register"),
-						ShortReg::V => write!(f, "V register"),
-						ShortReg::W => write!(f, "W register"),
-						ShortReg::X => write!(f, "X register"),
-						ShortReg::Y => write!(f, "Y register"),
-						ShortReg::Z => write!(f, "Z register"),
+						ShortReg::SR0 => write!(f, "short register 0"),
+						ShortReg::SR1 => write!(f, "short register 1"),
+						ShortReg::SR2 => write!(f, "short register 2"),
+						ShortReg::SR3 => write!(f, "short register 3"),
+						ShortReg::SR4 => write!(f, "short register 4"),
+						ShortReg::SR5 => write!(f, "short register 5"),
+						ShortReg::SR6 => write!(f, "short register 6"),
+						ShortReg::SR7 => write!(f, "short register 7"),
 					},
 				},
 				Word::Directive(dir) => match dir {
@@ -493,17 +473,15 @@ impl fmt::Display for Token {
 					Inst::SetZeroFlag => write!(f, "set zero flag instruction"),
 					Inst::ClearCarryFlag => write!(f, "clear carry flag instruction"),
 					Inst::SetCarryFlag => write!(f, "set carry flag instruction"),
-					Inst::ClearHalfCarryFlag => write!(f, "clear half-carry flag instruction"),
-					Inst::SetHalfCarryFlag => write!(f, "set half-carry flag instruction"),
+					Inst::ClearAdjustFlag => write!(f, "clear adjust flag instruction"),
+					Inst::SetAdjustFlag => write!(f, "set adjust flag instruction"),
 					Inst::ClearOverflowFlag => write!(f, "clear overflow flag instruction"),
 					Inst::SetOverflowFlag => write!(f, "set overflow flag instruction"),
 					Inst::ClearNegativeFlag => write!(f, "clear negative flag instruction"),
 					Inst::SetNegativeFlag => write!(f, "set negative flag instruction"),
 					Inst::EnableInterrupts => write!(f, "enable interrupts instruction"),
 					Inst::DisableInterrupts => write!(f, "disable interrupts instruction"),
-					Inst::Swap => write!(f, "swap instruction"),
 					Inst::Load => write!(f, "load instruction"),
-					Inst::LoadZero => write!(f, "load zero instruction"),
 					Inst::Pull => write!(f, "pull instruction"),
 					Inst::Push => write!(f, "push instruction"),
 					Inst::PullFlags => write!(f, "pull flags instruction"),
@@ -561,40 +539,23 @@ impl fmt::Display for Token {
 					Inst::CallSubroutineIfLessOrEqual => write!(f, "call subroutine if less or equal instruction"),
 					Inst::CallSubroutineIfGreaterOrEqual => write!(f, "call subroutine if greater or equal instruction"),
 					Inst::CallSubroutineIfGreater => write!(f, "call subroutine if greater instruction"),
-					Inst::ReturnFromSubroutine => write!(f, "return from subroutine instruction"),
-					Inst::ReturnFromSubroutineIfZero => write!(f, "return from subroutine if zero instruction"),
-					Inst::ReturnFromSubroutineIfNotZero => write!(f, "return from subroutine if not zero instruction"),
-					Inst::ReturnFromSubroutineIfCarry => write!(f, "return from subroutine if carry instruction"),
-					Inst::ReturnFromSubroutineIfBelow => write!(f, "return from subroutine if below instruction"),
-					Inst::ReturnFromSubroutineIfNotCarry => write!(f, "return from subroutine if not carry instruction"),
-					Inst::ReturnFromSubroutineIfAboveOrEqual => write!(f, "return from subroutine if above or equal instruction"),
-					Inst::ReturnFromSubroutineIfOverflow => write!(f, "return from subroutine if overflow instruction"),
-					Inst::ReturnFromSubroutineIfNotOverflow => write!(f, "return from subroutine if not overflow instruction"),
-					Inst::ReturnFromSubroutineIfPositive => write!(f, "return from subroutine if positive instruction"),
-					Inst::ReturnFromSubroutineIfNegative => write!(f, "return from subroutine if negative instruction"),
-					Inst::ReturnFromSubroutineIfBelowOrEqual => write!(f, "return from subroutine if below or equal instruction"),
-					Inst::ReturnFromSubroutineIfAbove => write!(f, "return from subroutine if above instruction"),
-					Inst::ReturnFromSubroutineIfLess => write!(f, "return from subroutine if less instruction"),
-					Inst::ReturnFromSubroutineIfLessOrEqual => write!(f, "return from subroutine if less or equal instruction"),
-					Inst::ReturnFromSubroutineIfGreaterOrEqual => write!(f, "return from subroutine if greater or equal instruction"),
-					Inst::ReturnFromSubroutineIfGreater => write!(f, "return from subroutine if greater instruction"),
-					Inst::ReturnFromInterrupt => write!(f, "return from interrupt instruction"),
-					Inst::ReturnFromInterruptIfZero => write!(f, "return from interrupt if zero instruction"),
-					Inst::ReturnFromInterruptIfNotZero => write!(f, "return from interrupt if not zero instruction"),
-					Inst::ReturnFromInterruptIfCarry => write!(f, "return from interrupt if carry instruction"),
-					Inst::ReturnFromInterruptIfBelow => write!(f, "return from interrupt if below instruction"),
-					Inst::ReturnFromInterruptIfNotCarry => write!(f, "return from interrupt if not carry instruction"),
-					Inst::ReturnFromInterruptIfAboveOrEqual => write!(f, "return from interrupt if above or equal instruction"),
-					Inst::ReturnFromInterruptIfOverflow => write!(f, "return from interrupt if overflow instruction"),
-					Inst::ReturnFromInterruptIfNotOverflow => write!(f, "return from interrupt if not overflow instruction"),
-					Inst::ReturnFromInterruptIfPositive => write!(f, "return from interrupt if positive instruction"),
-					Inst::ReturnFromInterruptIfNegative => write!(f, "return from interrupt if negative instruction"),
-					Inst::ReturnFromInterruptIfBelowOrEqual => write!(f, "return from interrupt if below or equal instruction"),
-					Inst::ReturnFromInterruptIfAbove => write!(f, "return from interrupt if above instruction"),
-					Inst::ReturnFromInterruptIfLess => write!(f, "return from interrupt if less instruction"),
-					Inst::ReturnFromInterruptIfLessOrEqual => write!(f, "return from interrupt if less or equal instruction"),
-					Inst::ReturnFromInterruptIfGreaterOrEqual => write!(f, "return from interrupt if greater or equal instruction"),
-					Inst::ReturnFromInterruptIfGreater => write!(f, "return from interrupt if greater instruction"),
+					Inst::Return => write!(f, "return instruction"),
+					Inst::ReturnIfZero => write!(f, "return if zero instruction"),
+					Inst::ReturnIfNotZero => write!(f, "return if not zero instruction"),
+					Inst::ReturnIfCarry => write!(f, "return if carry instruction"),
+					Inst::ReturnIfBelow => write!(f, "return if below instruction"),
+					Inst::ReturnIfNotCarry => write!(f, "return if not carry instruction"),
+					Inst::ReturnIfAboveOrEqual => write!(f, "return if above or equal instruction"),
+					Inst::ReturnIfOverflow => write!(f, "return if overflow instruction"),
+					Inst::ReturnIfNotOverflow => write!(f, "return if not overflow instruction"),
+					Inst::ReturnIfPositive => write!(f, "return if positive instruction"),
+					Inst::ReturnIfNegative => write!(f, "return if negative instruction"),
+					Inst::ReturnIfBelowOrEqual => write!(f, "return if below or equal instruction"),
+					Inst::ReturnIfAbove => write!(f, "return if above instruction"),
+					Inst::ReturnIfLess => write!(f, "return if less instruction"),
+					Inst::ReturnIfLessOrEqual => write!(f, "return if less or equal instruction"),
+					Inst::ReturnIfGreaterOrEqual => write!(f, "return if greater or equal instruction"),
+					Inst::ReturnIfGreater => write!(f, "return if greater instruction"),
 					Inst::Break => write!(f, "break instruction"),
 					Inst::DispatchInterruptTable => write!(f, "dispatch interrupt table instruction"),
 					Inst::WaitForInterrupt => write!(f, "wait for interrupt instruction"),
@@ -689,7 +650,7 @@ impl Addr {
 			if let Ok(p) = u16::from_str_radix(&slice, 2) {
 				Some(Addr::DirectPort(p))
 			} else { None }
-		} else if let Some(s) = slice.strip_prefix("ip") {
+		} else if let Some(s) = slice.strip_prefix("pc") {
 			// Relative
 			slice = String::from(s);
 
@@ -724,7 +685,7 @@ impl Addr {
 			if let Ok(p) = u16::from_str_radix(&slice, 10) {
 				Some(Addr::DirectPort(p))
 			} else { None }
-		} else if let Some(s) = slice.strip_prefix("ip") {
+		} else if let Some(s) = slice.strip_prefix("pc") {
 			// Relative
 			slice = String::from(s);
 
@@ -765,7 +726,7 @@ impl Addr {
 			if let Ok(p) = u16::from_str_radix(&slice, 16) {
 				Some(Addr::DirectPort(p))
 			} else { None }
-		} else if let Some(s) = slice.strip_prefix("ip") {
+		} else if let Some(s) = slice.strip_prefix("pc") {
 			// Relative
 			slice = String::from(s);
 
@@ -798,14 +759,14 @@ impl Addr {
 			slice = String::from(s);
 
 			match slice.as_str() {
-				"a" => Some(Addr::IndirectPort(FullReg::A)),
-				"b" => Some(Addr::IndirectPort(FullReg::B)),
-				"c" => Some(Addr::IndirectPort(FullReg::C)),
-				"d" => Some(Addr::IndirectPort(FullReg::D)),
-				"e" => Some(Addr::IndirectPort(FullReg::E)),
-				"f" => Some(Addr::IndirectPort(FullReg::F)),
-				"g" => Some(Addr::IndirectPort(FullReg::G)),
-				"h" => Some(Addr::IndirectPort(FullReg::H)),
+				"r0" => Some(Addr::IndirectPort(FullReg::R0)),
+				"r1" => Some(Addr::IndirectPort(FullReg::R1)),
+				"r2" => Some(Addr::IndirectPort(FullReg::R2)),
+				"r3" => Some(Addr::IndirectPort(FullReg::R3)),
+				"r4" => Some(Addr::IndirectPort(FullReg::R4)),
+				"r5" => Some(Addr::IndirectPort(FullReg::R5)),
+				"r6" => Some(Addr::IndirectPort(FullReg::R6)),
+				"r7" => Some(Addr::IndirectPort(FullReg::R7)),
 				_ => None
 			}
 		} else if let Some(s) = slice.strip_prefix("ip") {
@@ -813,28 +774,28 @@ impl Addr {
 			slice = String::from(s.strip_prefix('+')?);
 
 			match slice.as_str() {
-				"a" => Some(Addr::IndirectRelative(FullReg::A)),
-				"b" => Some(Addr::IndirectRelative(FullReg::B)),
-				"c" => Some(Addr::IndirectRelative(FullReg::C)),
-				"d" => Some(Addr::IndirectRelative(FullReg::D)),
-				"e" => Some(Addr::IndirectRelative(FullReg::E)),
-				"f" => Some(Addr::IndirectRelative(FullReg::F)),
-				"g" => Some(Addr::IndirectRelative(FullReg::G)),
-				"h" => Some(Addr::IndirectRelative(FullReg::H)),
+				"r0" => Some(Addr::IndirectRelative(FullReg::R0)),
+				"r1" => Some(Addr::IndirectRelative(FullReg::R1)),
+				"r2" => Some(Addr::IndirectRelative(FullReg::R2)),
+				"r3" => Some(Addr::IndirectRelative(FullReg::R3)),
+				"r4" => Some(Addr::IndirectRelative(FullReg::R4)),
+				"r5" => Some(Addr::IndirectRelative(FullReg::R5)),
+				"r6" => Some(Addr::IndirectRelative(FullReg::R6)),
+				"r7" => Some(Addr::IndirectRelative(FullReg::R7)),
 				_ => None
 			}
 		} else {
 			// Standard
 
 			match slice.as_str() {
-				"as" => Some(Addr::Indirect(RegPair::AS)),
-				"bt" => Some(Addr::Indirect(RegPair::BT)),
-				"cu" => Some(Addr::Indirect(RegPair::CU)),
-				"dv" => Some(Addr::Indirect(RegPair::DV)),
-				"ew" => Some(Addr::Indirect(RegPair::EW)),
-				"fx" => Some(Addr::Indirect(RegPair::FX)),
-				"gy" => Some(Addr::Indirect(RegPair::GY)),
-				"hz" => Some(Addr::Indirect(RegPair::HZ)),
+				"rp0" => Some(Addr::Indirect(RegPair::RP0)),
+				"rp1" => Some(Addr::Indirect(RegPair::RP1)),
+				"rp2" => Some(Addr::Indirect(RegPair::RP2)),
+				"rp3" => Some(Addr::Indirect(RegPair::RP3)),
+				"rp4" => Some(Addr::Indirect(RegPair::RP4)),
+				"rp5" => Some(Addr::Indirect(RegPair::RP5)),
+				"rp6" => Some(Addr::Indirect(RegPair::RP6)),
+				"rp7" => Some(Addr::Indirect(RegPair::RP7)),
 				_ => None
 			}
 		}
@@ -907,17 +868,15 @@ impl Word {
 				"sez" => Word::Instruction(Inst::SetZeroFlag),
 				"clc" => Word::Instruction(Inst::ClearCarryFlag),
 				"sec" => Word::Instruction(Inst::SetCarryFlag),
-				"clh" => Word::Instruction(Inst::ClearHalfCarryFlag),
-				"seh" => Word::Instruction(Inst::SetHalfCarryFlag),
+				"cla" => Word::Instruction(Inst::ClearAdjustFlag),
+				"sea" => Word::Instruction(Inst::SetAdjustFlag),
 				"clv" => Word::Instruction(Inst::ClearOverflowFlag),
 				"sev" => Word::Instruction(Inst::SetOverflowFlag),
 				"cln" => Word::Instruction(Inst::ClearNegativeFlag),
 				"sen" => Word::Instruction(Inst::SetNegativeFlag),
 				"ei" => Word::Instruction(Inst::EnableInterrupts),
 				"di" => Word::Instruction(Inst::DisableInterrupts),
-				"swp" => Word::Instruction(Inst::Swap),
 				"ld" => Word::Instruction(Inst::Load),
-				"ldz" => Word::Instruction(Inst::LoadZero),
 				"pl" => Word::Instruction(Inst::Pull),
 				"ph" => Word::Instruction(Inst::Push),
 				"plf" => Word::Instruction(Inst::PullFlags),
@@ -975,61 +934,44 @@ impl Word {
 				"cle" => Word::Instruction(Inst::CallSubroutineIfLessOrEqual),
 				"cge" => Word::Instruction(Inst::CallSubroutineIfGreaterOrEqual),
 				"cg" => Word::Instruction(Inst::CallSubroutineIfGreater),
-				"rts" => Word::Instruction(Inst::ReturnFromSubroutine),
-				"rsz" => Word::Instruction(Inst::ReturnFromSubroutineIfZero),
-				"rsnz" => Word::Instruction(Inst::ReturnFromSubroutineIfNotZero),
-				"rsc" => Word::Instruction(Inst::ReturnFromSubroutineIfCarry),
-				"rsb" => Word::Instruction(Inst::ReturnFromSubroutineIfBelow),
-				"rsnc" => Word::Instruction(Inst::ReturnFromSubroutineIfNotCarry),
-				"rsae" => Word::Instruction(Inst::ReturnFromSubroutineIfAboveOrEqual),
-				"rsv" => Word::Instruction(Inst::ReturnFromSubroutineIfOverflow),
-				"rsnv" => Word::Instruction(Inst::ReturnFromSubroutineIfNotOverflow),
-				"rsp" => Word::Instruction(Inst::ReturnFromSubroutineIfPositive),
-				"rsn" => Word::Instruction(Inst::ReturnFromSubroutineIfNegative),
-				"rsbe" => Word::Instruction(Inst::ReturnFromSubroutineIfBelowOrEqual),
-				"rsa" => Word::Instruction(Inst::ReturnFromSubroutineIfAbove),
-				"rsl" => Word::Instruction(Inst::ReturnFromSubroutineIfLess),
-				"rsle" => Word::Instruction(Inst::ReturnFromSubroutineIfLessOrEqual),
-				"rsge" => Word::Instruction(Inst::ReturnFromSubroutineIfGreaterOrEqual),
-				"rsg" => Word::Instruction(Inst::ReturnFromSubroutineIfGreater),
-				"rti" => Word::Instruction(Inst::ReturnFromInterrupt),
-				"riz" => Word::Instruction(Inst::ReturnFromInterruptIfZero),
-				"rinz" => Word::Instruction(Inst::ReturnFromInterruptIfNotZero),
-				"ric" => Word::Instruction(Inst::ReturnFromInterruptIfCarry),
-				"rib" => Word::Instruction(Inst::ReturnFromInterruptIfBelow),
-				"rinc" => Word::Instruction(Inst::ReturnFromInterruptIfNotCarry),
-				"riae" => Word::Instruction(Inst::ReturnFromInterruptIfAboveOrEqual),
-				"riv" => Word::Instruction(Inst::ReturnFromInterruptIfOverflow),
-				"rinv" => Word::Instruction(Inst::ReturnFromInterruptIfNotOverflow),
-				"rip" => Word::Instruction(Inst::ReturnFromInterruptIfPositive),
-				"rin" => Word::Instruction(Inst::ReturnFromInterruptIfNegative),
-				"ribe" => Word::Instruction(Inst::ReturnFromInterruptIfBelowOrEqual),
-				"ria" => Word::Instruction(Inst::ReturnFromInterruptIfAbove),
-				"ril" => Word::Instruction(Inst::ReturnFromInterruptIfLess),
-				"rile" => Word::Instruction(Inst::ReturnFromInterruptIfLessOrEqual),
-				"rige" => Word::Instruction(Inst::ReturnFromInterruptIfGreaterOrEqual),
-				"rig" => Word::Instruction(Inst::ReturnFromInterruptIfGreater),
+				"rts" => Word::Instruction(Inst::Return),
+				"rsz" => Word::Instruction(Inst::ReturnIfZero),
+				"rsnz" => Word::Instruction(Inst::ReturnIfNotZero),
+				"rsc" => Word::Instruction(Inst::ReturnIfCarry),
+				"rsb" => Word::Instruction(Inst::ReturnIfBelow),
+				"rsnc" => Word::Instruction(Inst::ReturnIfNotCarry),
+				"rsae" => Word::Instruction(Inst::ReturnIfAboveOrEqual),
+				"rsv" => Word::Instruction(Inst::ReturnIfOverflow),
+				"rsnv" => Word::Instruction(Inst::ReturnIfNotOverflow),
+				"rsp" => Word::Instruction(Inst::ReturnIfPositive),
+				"rsn" => Word::Instruction(Inst::ReturnIfNegative),
+				"rsbe" => Word::Instruction(Inst::ReturnIfBelowOrEqual),
+				"rsa" => Word::Instruction(Inst::ReturnIfAbove),
+				"rsl" => Word::Instruction(Inst::ReturnIfLess),
+				"rsle" => Word::Instruction(Inst::ReturnIfLessOrEqual),
+				"rsge" => Word::Instruction(Inst::ReturnIfGreaterOrEqual),
+				"rsg" => Word::Instruction(Inst::ReturnIfGreater),
 				"brk" => Word::Instruction(Inst::Break),
 				"dit" => Word::Instruction(Inst::DispatchInterruptTable),
 				"wait" => Word::Instruction(Inst::WaitForInterrupt),
 				"res" => Word::Instruction(Inst::Reset),
 				"halt" => Word::Instruction(Inst::Halt),
-				"a" => Word::Register(Reg::Full(FullReg::A)),
-				"b" => Word::Register(Reg::Full(FullReg::B)),
-				"c" => Word::Register(Reg::Full(FullReg::C)),
-				"d" => Word::Register(Reg::Full(FullReg::D)),
-				"e" => Word::Register(Reg::Full(FullReg::E)),
-				"f" => Word::Register(Reg::Full(FullReg::F)),
-				"g" => Word::Register(Reg::Full(FullReg::G)),
-				"h" => Word::Register(Reg::Full(FullReg::H)),
-				"s" => Word::Register(Reg::Short(ShortReg::S)),
-				"t" => Word::Register(Reg::Short(ShortReg::T)),
-				"u" => Word::Register(Reg::Short(ShortReg::U)),
-				"v" => Word::Register(Reg::Short(ShortReg::V)),
-				"w" => Word::Register(Reg::Short(ShortReg::W)),
-				"x" => Word::Register(Reg::Short(ShortReg::X)),
-				"y" => Word::Register(Reg::Short(ShortReg::Y)),
-				"z" => Word::Register(Reg::Short(ShortReg::Z)),
+				"r0" => Word::Register(Reg::Full(FullReg::R0)),
+				"r1" => Word::Register(Reg::Full(FullReg::R1)),
+				"r2" => Word::Register(Reg::Full(FullReg::R2)),
+				"r3" => Word::Register(Reg::Full(FullReg::R3)),
+				"r4" => Word::Register(Reg::Full(FullReg::R4)),
+				"r5" => Word::Register(Reg::Full(FullReg::R5)),
+				"r6" => Word::Register(Reg::Full(FullReg::R6)),
+				"r7" => Word::Register(Reg::Full(FullReg::R7)),
+				"sr0" => Word::Register(Reg::Short(ShortReg::SR0)),
+				"sr1" => Word::Register(Reg::Short(ShortReg::SR1)),
+				"sr2" => Word::Register(Reg::Short(ShortReg::SR2)),
+				"sr3" => Word::Register(Reg::Short(ShortReg::SR3)),
+				"sr4" => Word::Register(Reg::Short(ShortReg::SR4)),
+				"sr5" => Word::Register(Reg::Short(ShortReg::SR5)),
+				"sr6" => Word::Register(Reg::Short(ShortReg::SR6)),
+				"sr7" => Word::Register(Reg::Short(ShortReg::SR7)),
 				_ => Word::Identifier(s)
 			})
 		}
